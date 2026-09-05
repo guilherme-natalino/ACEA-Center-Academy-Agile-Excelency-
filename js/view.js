@@ -227,7 +227,7 @@ function renderAccountIdentity() {
   if (!identity) return;
 
   if (!currentUser) {
-    identity.innerHTML = '<img class="avatar-logo" src="assets/favicon.png" alt="Entrar ou criar conta">';
+    identity.textContent = '🙍‍♂️';
     return;
   }
 
