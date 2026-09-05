@@ -17,15 +17,17 @@ const Security = (() => {
     A10: 'A10:2025 - Mishandling of Exceptional Conditions'
   });
 
-  // Only these tables may be addressed through the browser REST facade.
-  const SUPABASE_TABLES = Object.freeze(['profiles', 'mastery', 'sessions']);
-
   // Hosts explicitly trusted for learning materials opened by the app.
   const ALLOWED_EXTERNAL_HOSTS = Object.freeze(['www.youtube.com', 'youtube.com', 'youtu.be']);
 
-  // Returns true only for a valid UUID v4-like value used by Supabase identifiers.
+  // Returns true only for a valid UUID v4-like value used by generic identifiers.
   function safeUuid(value) {
     return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
+  }
+
+  // Validates Firebase Auth identifiers without assuming UUID formatting.
+  function safeFirebaseUid(value) {
+    return /^[A-Za-z0-9_-]{20,128}$/.test(String(value || ''));
   }
 
   // Restricts a number to an integer range so corrupted storage data cannot create impossible state.
@@ -89,7 +91,7 @@ const Security = (() => {
   function parseStoredUser(value) {
     try {
       const user = JSON.parse(value || 'null');
-      if (!user || !safeUuid(user.id)) return null;
+      if (!user || !(safeUuid(user.id) || safeFirebaseUid(user.id))) return null;
       const email = String(user.email || '').trim();
       return { id: user.id, email };
     } catch (error) {
@@ -134,6 +136,10 @@ const Security = (() => {
       quizSeen: sanitizeMap(source?.quizSeen, fallback.quizSeen || {}, 10000),
       trainingCount: clampInt(source?.trainingCount ?? source?.training_count ?? fallback.trainingCount, 0, 100000000),
       promotionCount: clampInt(source?.promotionCount ?? source?.promotion_count ?? fallback.promotionCount, 0, 100),
+      consentVersion: typeof (source?.consentVersion ?? source?.consent_version) === 'string'
+        ? (source?.consentVersion ?? source?.consent_version).slice(0, 20) : null,
+      consentAt: typeof (source?.consentAt ?? source?.consent_at) === 'string'
+        ? (source?.consentAt ?? source?.consent_at).slice(0, 40) : null,
       daily: {
         date: typeof source?.daily?.date === 'string' ? source.daily.date : (fallback.daily?.date || null),
         done: Boolean(source?.daily?.done),
@@ -195,9 +201,9 @@ const Security = (() => {
 
   return Object.freeze({
     OWASP_2025,
-    SUPABASE_TABLES,
     ALLOWED_EXTERNAL_HOSTS,
     safeUuid,
+    safeFirebaseUid,
     safeEmail,
     validPassword,
     clampInt,

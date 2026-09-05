@@ -1,195 +1,92 @@
 // Model: application data, authentication facade, state and business rules.
 // Security baseline: see security.js and SECURITY.md (OWASP Top 10:2025 mapping).
 
-// Supabase URL is public configuration for a browser client. NEVER place a service-role key here.
-const SUPA_URL = 'https://zkavsisuylbafumxsgus.supabase.co';
-const SUPA_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InprYXZzaXN1eWxiYWZ1bXhzZ3VzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODcyMDM0NzUsImV4cCI6MjEwMjc3OTQ3NX0.VzgXxsV4YIjrKSdwN3YDgaxGmItXCvSVeOjU7w80_AI';
+// Firebase Web configuration is public client configuration. Never put service-account keys here.
+const FIREBASE_CONFIG = Object.freeze({
+  apiKey: 'AIzaSyBnH0DG201aEqrhFsAA9Ega4tkft7tNXls',
+  authDomain: 'aeca-agile-excellence.firebaseapp.com',
+  projectId: 'aeca-agile-excellence',
+  storageBucket: 'aeca-agile-excellence.firebasestorage.app',
+  messagingSenderId: '185775942903',
+  appId: '1:185775942903:web:23c964ed953ea22cee77f2',
+  measurementId: 'G-DTSE13PL8X'
+});
 
-// Returns the current Supabase access token or the public anon key when no session exists.
-function getToken() {
-  return localStorage.getItem('sb-token') || SUPA_ANON_KEY;
-}
-
-// Builds the common request headers used by Supabase Auth and REST APIs.
-function hdr(token) {
-  return {
-    apikey: SUPA_ANON_KEY,
-    Authorization: 'Bearer ' + (token || SUPA_ANON_KEY),
-    'Content-Type': 'application/json'
-  };
-}
+firebase.initializeApp(FIREBASE_CONFIG);
+const firebaseAuth = firebase.auth();
+const firestore = firebase.firestore();
+const firebaseUser = (user) => user && user.uid ? { id: user.uid, email: user.email || '' } : null;
 
 const sb = {
-  // Creates a new account using Supabase Auth.
   async signUp(email, pass) {
-    const response = await safeFetch(SUPA_URL + '/auth/v1/signup', {
-      method: 'POST',
-      headers: hdr(SUPA_ANON_KEY),
-      body: JSON.stringify({ email, password: pass })
-    });
-    return await safeJson(response, {});
+    try { return { user: firebaseUser((await firebaseAuth.createUserWithEmailAndPassword(email, pass)).user) }; }
+    catch (error) { return { error: { message: error.code || error.message } }; }
   },
 
-  // Authenticates an existing user and stores the session tokens.
   async signIn(email, pass) {
-    const response = await safeFetch(SUPA_URL + '/auth/v1/token?grant_type=password', {
-      method: 'POST',
-      headers: hdr(SUPA_ANON_KEY),
-      body: JSON.stringify({ email, password: pass })
-    });
-    const data = await safeJson(response, {});
-
-    if (data.access_token) {
-      localStorage.setItem('sb-token', data.access_token);
-      localStorage.setItem('sb-refresh', data.refresh_token || '');
-    }
-
-    return data;
+    try { return { user: firebaseUser((await firebaseAuth.signInWithEmailAndPassword(email, pass)).user) }; }
+    catch (error) { return { error: { message: error.code || error.message } }; }
   },
 
-  // Ends the Supabase session and clears locally stored authentication data.
   async signOut() {
-    try {
-      await safeFetch(SUPA_URL + '/auth/v1/logout', {
-        method: 'POST',
-        headers: hdr(getToken())
-      });
-    } catch (error) {
-      Security.log('Logout request failed', { message: error.message });
-    }
-
-    localStorage.removeItem('sb-token');
-    localStorage.removeItem('sb-refresh');
+    try { await firebaseAuth.signOut(); }
+    catch (error) { Security.log('Logout request failed', { message: error.code || error.message }); }
+    localStorage.removeItem('firebase_user');
     localStorage.removeItem('supa_user');
   },
 
-  // Refreshes an expired access token using the refresh token.
-  async refreshSession() {
-    const refreshToken = localStorage.getItem('sb-refresh');
-    if (!refreshToken) return null;
+  async getUser() { return firebaseUser(firebaseAuth.currentUser); },
 
-    try {
-      const response = await safeFetch(SUPA_URL + '/auth/v1/token?grant_type=refresh_token', {
-        method: 'POST',
-        headers: hdr(SUPA_ANON_KEY),
-        body: JSON.stringify({ refresh_token: refreshToken })
-      });
-      const data = await safeJson(response, {});
-
-      if (data.access_token) {
-        localStorage.setItem('sb-token', data.access_token);
-        if (data.refresh_token) localStorage.setItem('sb-refresh', data.refresh_token);
-        return data;
-      }
-    } catch (error) {
-      Security.log('Session refresh failed', { message: error.message });
-    }
-
-    return null;
-  },
-
-  // Loads the current authenticated user from Supabase.
-  async getUser() {
-    try {
-      const response = await safeFetch(SUPA_URL + '/auth/v1/user', { headers: hdr(getToken()) });
-      const data = await safeJson(response, null);
-      return data && data.id ? { id: data.id, email: data.email || '' } : null;
-    } catch (error) {
-      Security.log('User lookup failed', { message: error.message });
-      return null;
-    }
-  },
-
-  // Executes a validated REST request against an allowed Supabase table.
-  async rest(method, table, body, query = '') {
-    const safeTable = Security.allowListValue(table, Security.SUPABASE_TABLES);
-    if (!safeTable) return null;
-
-    const url = SUPA_URL + '/rest/v1/' + safeTable + query;
-    const options = {
-      method,
-      headers: {
-        ...hdr(getToken()),
-        Prefer: method === 'POST' ? 'resolution=merge-duplicates,return=minimal' : ''
-      }
-    };
-
-    if (body !== undefined && body !== null) options.body = JSON.stringify(body);
-
-    try {
-      const response = await safeFetch(url, options);
-      if (!response.ok) {
-        Security.log('Supabase REST request rejected', { status: response.status, table: safeTable });
-        return null;
-      }
-      return safeJson(response, null);
-    } catch (error) {
-      Security.log('Supabase REST request failed', { message: error.message, table: safeTable });
-      return null;
-    }
-  },
-
-  // Saves the authenticated user's profile.
   async upsertProfile(data) {
-    return this.rest('POST', 'profiles', data, '?on_conflict=user_id');
+    if (!firebaseAuth.currentUser || data.user_id !== firebaseAuth.currentUser.uid) return null;
+    await firestore.collection('profiles').doc(data.user_id).set(data, { merge: true });
+    return data;
   },
 
-  // Saves concept mastery records for the authenticated user.
   async upsertMastery(rows) {
-    return this.rest('POST', 'mastery', rows, '?on_conflict=user_id,concept');
+    const user = firebaseAuth.currentUser;
+    if (!user) return null;
+    const batch = firestore.batch();
+    rows.filter((row) => row.user_id === user.uid).forEach((row) => {
+      const ref = firestore.collection('mastery').doc(user.uid).collection('concepts').doc(row.concept);
+      batch.set(ref, row, { merge: true });
+    });
+    await batch.commit();
+    return rows;
   },
 
-  // Stores a completed training session.
   async insertSession(data) {
-    return this.rest('POST', 'sessions', data, '');
+    const user = firebaseAuth.currentUser;
+    if (!user || data.user_id !== user.uid) return null;
+    return (await firestore.collection('sessions').doc(user.uid).collection('items').add(data)).id;
   },
 
-  // Loads one profile by the authenticated user's ID.
   async getProfile(userId) {
-    const safeId = Security.safeUuid(userId);
-    if (!safeId) return null;
-    const data = await this.rest('GET', 'profiles', null, '?user_id=eq.' + encodeURIComponent(safeId) + '&limit=1');
-    return Array.isArray(data) && data.length ? data[0] : null;
+    if (!firebaseAuth.currentUser || userId !== firebaseAuth.currentUser.uid) return null;
+    const snapshot = await firestore.collection('profiles').doc(userId).get();
+    return snapshot.exists ? snapshot.data() : null;
   },
 
-  // Loads mastery records by the authenticated user's ID.
   async getMastery(userId) {
-    const safeId = Security.safeUuid(userId);
-    if (!safeId) return [];
-    const data = await this.rest('GET', 'mastery', null, '?user_id=eq.' + encodeURIComponent(safeId));
-    return Array.isArray(data) ? data : [];
+    if (!firebaseAuth.currentUser || userId !== firebaseAuth.currentUser.uid) return [];
+    const snapshot = await firestore.collection('mastery').doc(userId).collection('concepts').get();
+    return snapshot.docs.map((doc) => doc.data());
   }
 };
 
 let currentUser = null;
 
-// Restores an existing Supabase session without trusting arbitrary local-storage objects.
+// Restores the Firebase session and uses local storage only as a display fallback.
 async function loadAuth() {
-  const token = localStorage.getItem('sb-token');
-
-  if (!token) {
-    currentUser = Security.parseStoredUser(localStorage.getItem('supa_user'));
-    return;
-  }
-
-  const user = await sb.getUser();
-  if (user) {
-    currentUser = user;
-    localStorage.setItem('supa_user', JSON.stringify(user));
-    return;
-  }
-
-  const refreshed = await sb.refreshSession();
-  if (!refreshed) {
-    localStorage.removeItem('sb-token');
-    localStorage.removeItem('sb-refresh');
-    localStorage.removeItem('supa_user');
-    currentUser = null;
-    return;
-  }
-
-  currentUser = await sb.getUser();
-  if (currentUser) localStorage.setItem('supa_user', JSON.stringify(currentUser));
+  await new Promise((resolve) => {
+    const unsubscribe = firebaseAuth.onAuthStateChanged((user) => {
+      currentUser = firebaseUser(user);
+      if (currentUser) localStorage.setItem('firebase_user', JSON.stringify(currentUser));
+      else localStorage.removeItem('firebase_user');
+      unsubscribe();
+      resolve();
+    });
+  });
 }
 
 const BANK_RAW=[
@@ -407,6 +304,8 @@ function defaultProfile() {
     quizSeen: {},
     trainingCount: 0,
     promotionCount: 0,
+    consentVersion: null,
+    consentAt: null,
     daily: { date: null, done: false, score: 0 }
   };
 }
@@ -487,9 +386,9 @@ function markSeen(questions) {
   });
 }
 
-// Synchronizes the local profile with Supabase using server-owned user identity.
+// Synchronizes the local profile with Firebase using server-owned user identity.
 async function syncToCloud() {
-  if (!currentUser || !Security.safeUuid(currentUser.id)) return;
+  if (!currentUser || !Security.safeFirebaseUid(currentUser.id)) return;
 
   const userId = currentUser.id;
   try {
@@ -506,7 +405,9 @@ async function syncToCloud() {
       achievements: profile.achievements,
       daily: profile.daily,
       training_count: profile.trainingCount,
-      promotion_count: profile.promotionCount
+      promotion_count: profile.promotionCount,
+      consent_version: profile.consentVersion,
+      consent_at: profile.consentAt
     });
 
     const rows = Object.entries(profile.mastery)
@@ -525,41 +426,54 @@ async function syncToCloud() {
   }
 }
 
-// Loads and validates the authenticated user's cloud profile and mastery data.
-async function loadFromCloud() {
-  if (!currentUser || !Security.safeUuid(currentUser.id)) return false;
+// Fetches the authenticated user's cloud profile and mastery without applying it.
+async function fetchCloudData() {
+  if (!currentUser || !Security.safeFirebaseUid(currentUser.id)) return false;
 
   try {
     const [cloudProfile, masteryRows] = await Promise.all([
       sb.getProfile(currentUser.id),
       sb.getMastery(currentUser.id)
     ]);
-
-    if (cloudProfile) profile = Security.normalizeProfile(cloudProfile, profile);
-
-    if (masteryRows.length) {
-      masteryRows.forEach((row) => {
-        const concept = String(row.concept || '');
-        if (!concept || !Number.isFinite(Number(row.seen)) || !Number.isFinite(Number(row.correct))) return;
-        profile.mastery[concept] = {
-          seen: Security.clampInt(row.seen, 0, 1000000),
-          correct: Security.clampInt(row.correct, 0, 1000000),
-          recovery: Security.clampInt(row.recovery, 0, 1000000),
-          last: 0
-        };
-      });
-    }
-
-    return true;
+    return { profile: cloudProfile, masteryRows };
   } catch (error) {
     Security.log('Cloud profile load failed', { message: error.message });
-    return false;
+    return null;
   }
 }
 
-// Saves the current profile locally and schedules a debounced cloud sync.
+// Applies validated cloud data to the active profile.
+function applyCloudData(cloudData) {
+  if (!cloudData) return false;
+  if (cloudData.profile) profile = Security.normalizeProfile(cloudData.profile, profile);
+
+  if (cloudData.masteryRows.length) {
+    cloudData.masteryRows.forEach((row) => {
+        const concept = String(row.concept || '');
+        if (!concept || !Number.isFinite(Number(row.seen)) || !Number.isFinite(Number(row.correct))) return;
+        const seen = Security.clampInt(row.seen, 0, 1000000);
+        profile.mastery[concept] = {
+          seen,
+          correct: Math.min(Security.clampInt(row.correct, 0, 1000000), seen),
+          recovery: Security.clampInt(row.recovery, 0, 1000000),
+          last: 0
+        };
+    });
+  }
+  return Boolean(cloudData.profile || cloudData.masteryRows.length);
+}
+
+// Loads and applies the authenticated user's cloud profile and mastery data.
+async function loadFromCloud() {
+  return applyCloudData(await fetchCloudData());
+}
+
+// Saves authenticated progress to the cloud; visitor progress remains session-only.
 function save() {
-  localStorage.setItem('agile-academy-v3', JSON.stringify(Security.normalizeProfile(profile)));
+  if (!currentUser) {
+    updateAll();
+    return;
+  }
   clearTimeout(syncTimer);
   syncTimer = setTimeout(syncToCloud, 2000);
   updateAll();

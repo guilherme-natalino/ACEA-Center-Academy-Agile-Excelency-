@@ -24,15 +24,19 @@ test('Security helpers validate UUIDs, URLs and bounded integers', () => {
   assert.match(security, /Math\.min/);
 });
 
-test('Supabase table access is allowlisted', () => {
-  assert.match(security, /SUPABASE_TABLES/);
-  assert.match(model, /Security\.allowListValue\(table, Security\.SUPABASE_TABLES\)/);
+test('Firebase configuration and user identifiers are validated', () => {
+  assert.match(model, /FIREBASE_CONFIG/);
+  assert.match(model, /firebase\.firestore/);
+  assert.match(security, /function safeFirebaseUid/);
+  assert.match(model, /Security\.safeFirebaseUid\(currentUser\.id\)/);
 });
 
 test('CSP and security headers are defined for static hosting', () => {
   assert.match(html, /security\.js/);
   const headers = fs.readFileSync(path.join(root, '_headers'), 'utf8');
   assert.match(headers, /Content-Security-Policy/);
+  assert.match(headers, /gstatic\.com/);
+  assert.match(headers, /firestore\.googleapis\.com/);
   assert.match(headers, /X-Content-Type-Options: nosniff/);
   assert.match(headers, /Referrer-Policy/);
   assert.match(headers, /Permissions-Policy/);

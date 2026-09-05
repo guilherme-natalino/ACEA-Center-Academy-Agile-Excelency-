@@ -1,6 +1,8 @@
 // Controller: user events, navigation, authentication orchestration and boot.
 // Business data/rules live in model.js. DOM rendering lives in view.js.
 
+let pendingDataChoice = null;
+
 // Opens the account menu for an authenticated user.
 function showAuthMenu() {
   if (!currentUser) {
@@ -140,6 +142,10 @@ function showAuthModal() {
             </div>
           </div>
         </div>
+        <label class="consent-check" for="rConsent">
+          <input id="rConsent" type="checkbox">
+          <span>Li e aceito a <a href="data-policy.html" target="_blank" rel="noopener noreferrer">Política de Privacidade e Termos de Uso</a>.</span>
+        </label>
         <div id="rErr" class="auth-error" role="alert"></div>
         <button class="auth-submit" id="rBtn" type="button" data-action="submit-register">
           <span>Criar minha conta</span>
@@ -150,6 +156,44 @@ function showAuthModal() {
 
   openModal();
   window._authMode = 'login';
+}
+
+// Reports whether a profile contains meaningful study progress.
+function hasProgress(data) {
+  return Boolean(data && (data.totalAnswered > 0 || data.xp > 0 || Object.keys(data.mastery || {}).length));
+}
+
+// Asks which profile should win when a guest session and cloud data both exist.
+function showDataChoice(cloudData, sessionProfile) {
+  pendingDataChoice = { cloudData, sessionProfile };
+  document.getElementById('modalBody').innerHTML = `
+    <div class="modal-content data-choice">
+      <h2>Escolha seu progresso</h2>
+      <p class="muted small modal-intro">Encontramos dados salvos na nuvem e progresso nesta sessão.</p>
+      <div class="data-choice-actions">
+        <button class="btn" type="button" data-action="use-cloud-data">Continuar com a nuvem</button>
+        <button class="btn secondary" type="button" data-action="keep-session-data">Manter esta sessão</button>
+      </div>
+      <p class="muted tiny">A opção escolhida será usada para esta conta. O progresso não escolhido não será enviado.</p>
+    </div>`;
+  openModal();
+}
+
+// Resolves the explicit choice between cloud and current-session progress.
+async function resolveDataChoice(choice) {
+  if (!pendingDataChoice) return;
+  const selection = pendingDataChoice;
+  pendingDataChoice = null;
+  if (choice === 'cloud') applyCloudData(selection.cloudData);
+  else {
+    profile = selection.sessionProfile;
+    await syncToCloud();
+  }
+  closeModal();
+  renderHome();
+  renderProfile();
+  renderMetrics();
+  updateAll();
 }
 
 // Opens the modal and updates its accessibility state.
@@ -176,7 +220,7 @@ function setAuthMode(mode) {
   document.getElementById('formRegister').className = isLogin ? 'auth-form auth-form--hidden' : 'auth-form';
 }
 
-// Sends login or registration data to Supabase after local validation.
+// Sends login or registration data to Firebase after local validation.
 async function submitAuth() {
   const emailInput = document.getElementById('aEmail');
   const passwordInput = document.getElementById('aPass');
@@ -211,9 +255,16 @@ async function submitAuth() {
       currentUser = Security.parseStoredUser(JSON.stringify(response.user));
       if (!currentUser) throw new Error('Sessão inválida retornada pelo provedor.');
 
-      localStorage.setItem('supa_user', JSON.stringify(currentUser));
-      const loaded = await loadFromCloud();
-      if (!loaded) await syncToCloud();
+      localStorage.setItem('firebase_user', JSON.stringify(currentUser));
+      const sessionProfile = Security.normalizeProfile(profile);
+      const cloudData = await fetchCloudData();
+      const cloudHasProgress = Boolean(cloudData && (hasProgress(cloudData.profile) || cloudData.masteryRows.length));
+      if (cloudHasProgress && hasProgress(sessionProfile)) {
+        showDataChoice(cloudData, sessionProfile);
+        return;
+      }
+      if (cloudHasProgress) applyCloudData(cloudData);
+      else await syncToCloud();
     } else {
       response = await sb.signUp(email, password);
       if (response.error) {
@@ -226,7 +277,7 @@ async function submitAuth() {
 
       currentUser = Security.parseStoredUser(JSON.stringify(response.user));
       if (currentUser) {
-        localStorage.setItem('supa_user', JSON.stringify(currentUser));
+        localStorage.setItem('firebase_user', JSON.stringify(currentUser));
         await syncToCloud();
       }
     }
@@ -260,7 +311,7 @@ async function doSignOut() {
   closeModal();
   await sb.signOut();
   currentUser = null;
-  profile = loadLocalProfile();
+  profile = defaultProfile();
   renderHome();
   renderProfile();
   updateAll();
@@ -558,6 +609,8 @@ document.addEventListener('click', (event) => {
     case 'signout': doSignOut(); break;
     case 'study-concept': studyConcept(actionButton.dataset.c); break;
     case 'study-group': studyGroup(actionButton.dataset.group); break;
+    case 'use-cloud-data': resolveDataChoice('cloud'); break;
+    case 'keep-session-data': resolveDataChoice('session'); break;
     case 'answer': answer(actionButton); break;
     default: break;
   }
@@ -577,6 +630,7 @@ async function submitRegister() {
   const unidade   = document.getElementById('rUnidade')?.value || '';
   const pass      = document.getElementById('rPass')?.value || '';
   const pass2     = document.getElementById('rPass2')?.value || '';
+  const consent   = document.getElementById('rConsent')?.checked === true;
   const errorEl   = document.getElementById('rErr');
   const button    = document.getElementById('rBtn');
   const btnSpan   = button?.querySelector('span');
@@ -588,6 +642,7 @@ async function submitRegister() {
   if (!unidade) { errorEl.textContent = 'Selecione sua unidade de serviço.'; errorEl.classList.add('show'); return; }
   if (!Security.validPassword(pass)) { errorEl.textContent = 'A senha deve ter entre 8 e 128 caracteres.'; errorEl.classList.add('show'); return; }
   if (pass !== pass2) { errorEl.textContent = 'As senhas não coincidem.'; errorEl.classList.add('show'); return; }
+  if (!consent) { errorEl.textContent = 'Aceite a Política de Privacidade e os Termos de Uso para criar sua conta.'; errorEl.classList.add('show'); return; }
 
   if (btnSpan) btnSpan.textContent = 'Criando conta...';
   if (button) button.disabled = true;
@@ -604,8 +659,9 @@ async function submitRegister() {
       profile.nome      = nome;
       profile.sobrenome = sobrenome;
       profile.unidade   = unidade;
-      saveLocalProfile();
-      localStorage.setItem('supa_user', JSON.stringify(currentUser));
+      profile.consentVersion = '1.0';
+      profile.consentAt = new Date().toISOString();
+      localStorage.setItem('firebase_user', JSON.stringify(currentUser));
       await syncToCloud();
     }
     closeModal();
@@ -628,7 +684,8 @@ async function boot() {
   try {
     if ('scrollRestoration' in history) history.scrollRestoration = 'manual';
 
-    profile = loadLocalProfile();
+    localStorage.removeItem('agile-academy-v3');
+    profile = defaultProfile();
     showScreen('home');
     ensureDay();
     renderStudy();

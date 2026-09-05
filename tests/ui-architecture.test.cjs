@@ -78,3 +78,13 @@ test('Achievement catalog includes learning and progression milestones', () => {
   assert.match(controller, /score === 100/);
   assert.match(controller, /allCompetenciesMastered\(70\)/);
 });
+
+test('Account creation requires data policy consent and offers progress choice', () => {
+  assert.match(controller, /id="rConsent"/);
+  assert.match(controller, /data-policy\.html/);
+  assert.match(controller, /Aceite a Política de Privacidade/);
+  assert.match(controller, /data-action="use-cloud-data"/);
+  assert.match(controller, /data-action="keep-session-data"/);
+  assert.match(model, /visitor progress remains session-only/);
+  assert.doesNotMatch(model, /localStorage\.setItem\('agile-academy-v3'/);
+});
