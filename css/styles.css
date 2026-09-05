@@ -169,6 +169,7 @@ button,a{font:inherit}
   background: rgba(91,130,255,.2); border: 1px solid var(--accent); font-size: 10px;
 }
 .avatar-logo { width: 100%; height: 100%; object-fit: contain; display: block; border-radius: 50%; }
+.avatar-person-icon { width: 22px; height: 22px; color: var(--muted); display: block; }
 .icon-btn { width: 40px; height: 40px; background: transparent; }
 
 /* ---- Nav ícones SVG ---- */

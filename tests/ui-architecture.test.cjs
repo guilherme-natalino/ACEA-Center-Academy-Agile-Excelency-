@@ -91,7 +91,8 @@ test('Account creation requires data policy consent and offers progress choice',
 
 test('Account button uses the logo for visitors and name initials for users', () => {
   assert.match(view, /function renderAccountIdentity/);
-  assert.match(view, /🙍‍♂️/);
+  assert.match(view, /avatar-person-icon/);
+  assert.match(view, /viewBox="0 -960 960 960"/);
   assert.match(view, /profile\.nome/);
   assert.match(view, /profile\.sobrenome/);
   assert.match(model, /nome: profile\.nome/);
