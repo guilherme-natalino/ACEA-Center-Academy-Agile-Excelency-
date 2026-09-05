@@ -136,6 +136,9 @@ const Security = (() => {
       quizSeen: sanitizeMap(source?.quizSeen, fallback.quizSeen || {}, 10000),
       trainingCount: clampInt(source?.trainingCount ?? source?.training_count ?? fallback.trainingCount, 0, 100000000),
       promotionCount: clampInt(source?.promotionCount ?? source?.promotion_count ?? fallback.promotionCount, 0, 100),
+      nome: typeof source?.nome === 'string' ? source.nome.slice(0, 60) : '',
+      sobrenome: typeof source?.sobrenome === 'string' ? source.sobrenome.slice(0, 60) : '',
+      unidade: typeof source?.unidade === 'string' ? source.unidade.slice(0, 60) : '',
       consentVersion: typeof (source?.consentVersion ?? source?.consent_version) === 'string'
         ? (source?.consentVersion ?? source?.consent_version).slice(0, 20) : null,
       consentAt: typeof (source?.consentAt ?? source?.consent_at) === 'string'

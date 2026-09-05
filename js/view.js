@@ -221,6 +221,22 @@ function renderJourneyMascots() {
   }).join('');
 }
 
+// Shows the logo for visitors and the user's name initials after login.
+function renderAccountIdentity() {
+  const identity = document.getElementById('avatarInitials');
+  if (!identity) return;
+
+  if (!currentUser) {
+    identity.innerHTML = '<img class="avatar-logo" src="assets/favicon.png" alt="Entrar ou criar conta">';
+    return;
+  }
+
+  const first = String(profile.nome || '').trim().charAt(0);
+  const last = String(profile.sobrenome || '').trim().charAt(0);
+  const fallback = String(currentUser.email || 'GM').split('@')[0].slice(0, 2);
+  identity.textContent = (first + last || fallback).toUpperCase();
+}
+
 // Renders the complete Journey home screen from the current profile state.
 function renderHome() {
   ensureDay();
@@ -228,7 +244,7 @@ function renderHome() {
 
   document.getElementById('xp').textContent = `${profile.xp} XP`;
   document.getElementById('streakTop').textContent = `${profile.streak} dias`;
-  document.getElementById('avatarInitials').textContent = currentUser ? String(currentUser.email || 'GM').slice(0, 2).toUpperCase() : 'GM';
+  renderAccountIdentity();
   const welcomeEl = document.getElementById('welcome');
   if (welcomeEl) welcomeEl.textContent = LEVELS[profile.level - 1].label;
   const levelXPEl = document.getElementById('levelXPLabel');

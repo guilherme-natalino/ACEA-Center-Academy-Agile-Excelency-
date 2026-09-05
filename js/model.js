@@ -304,6 +304,9 @@ function defaultProfile() {
     quizSeen: {},
     trainingCount: 0,
     promotionCount: 0,
+    nome: '',
+    sobrenome: '',
+    unidade: '',
     consentVersion: null,
     consentAt: null,
     daily: { date: null, done: false, score: 0 }
@@ -406,6 +409,9 @@ async function syncToCloud() {
       daily: profile.daily,
       training_count: profile.trainingCount,
       promotion_count: profile.promotionCount,
+      nome: profile.nome,
+      sobrenome: profile.sobrenome,
+      unidade: profile.unidade,
       consent_version: profile.consentVersion,
       consent_at: profile.consentAt
     });

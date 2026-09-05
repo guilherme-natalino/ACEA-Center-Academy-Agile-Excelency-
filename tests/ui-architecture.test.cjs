@@ -88,3 +88,12 @@ test('Account creation requires data policy consent and offers progress choice',
   assert.match(model, /visitor progress remains session-only/);
   assert.doesNotMatch(model, /localStorage\.setItem\('agile-academy-v3'/);
 });
+
+test('Account button uses the logo for visitors and name initials for users', () => {
+  assert.match(view, /function renderAccountIdentity/);
+  assert.match(view, /avatar-logo/);
+  assert.match(view, /profile\.nome/);
+  assert.match(view, /profile\.sobrenome/);
+  assert.match(model, /nome: profile\.nome/);
+  assert.match(model, /sobrenome: profile\.sobrenome/);
+});
