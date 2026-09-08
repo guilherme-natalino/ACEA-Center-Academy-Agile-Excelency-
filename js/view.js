@@ -551,8 +551,8 @@ async function renderAdmin() {
           <div class="admin-ticket-meta"><span class="tag">${esc(ticket.status || 'open')}</span><span>${esc(ticket.category || '')}</span><span>${esc(ticket.email || '')}</span><small>${esc(ticket.created_at || '')}</small></div>
           <h3>${esc(ticket.subject || '')}</h3>
           <p>${esc(ticket.description || '')}</p>
-          <textarea class="admin-response" rows="4" data-ticket-response="${esc(ticket.id)}" placeholder="Escreva a resposta para o solicitante...">${esc(ticket.response || '')}</textarea>
-          <button class="btn" type="button" data-action="admin-respond" data-ticket-id="${esc(ticket.id)}">Salvar resposta</button>
+          ${ticket.response ? `<div class="support-detail-block support-response has-response"><b>Resposta enviada</b><p>${esc(ticket.response)}</p></div>` : ''}
+          ${ticket.status === 'closed' ? '<div class="support-closed-note">Chamado encerrado. Somente consulta.</div>' : `<textarea class="admin-response" rows="4" data-ticket-response="${esc(ticket.id)}" placeholder="Escreva a resposta para o solicitante...">${esc(ticket.response || '')}</textarea><button class="btn" type="button" data-action="admin-respond" data-ticket-id="${esc(ticket.id)}">Salvar resposta</button>`}
         </article>`).join('')
       : '<div class="empty">Nenhum chamado encontrado.</div>';
   } catch (error) {
@@ -593,8 +593,8 @@ function openSupportTicket(ticketId) {
 async function closeSupportTicket(ticketId) {
   const ticket = supportTicketsCache.find((item) => item.id === ticketId);
   if (!ticket || !confirm('Encerrar este chamado? Depois disso ele não poderá mais ser alterado.')) return;
-  const closed = await sb.closeSupportTicket(ticket);
-  if (!closed) { toast('Não foi possível encerrar o chamado.'); return; }
+  const result = await sb.closeSupportTicket(ticket);
+  if (!result.ok) { toast(result.reason || 'Não foi possível encerrar o chamado.'); return; }
   closeModal();
   toast('Chamado encerrado.');
   renderSupportTickets();

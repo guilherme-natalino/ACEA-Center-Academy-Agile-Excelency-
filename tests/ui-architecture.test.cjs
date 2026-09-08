@@ -111,6 +111,7 @@ test('Admin area is restricted and can respond to tickets', () => {
   assert.match(model, /async updateAdminTicket/);
   assert.match(model, /guilhermealisson14@hotmail\.com/);
   assert.match(view, /Admin tickets load failed/);
+  assert.match(view, /Resposta enviada/);
   assert.match(styles, /\*\[hidden\] \{ display: none !important; \}/);
 });
 

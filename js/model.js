@@ -100,8 +100,9 @@ const sb = {
   async createSupportTicket(data) {
     const user = firebaseAuth.currentUser;
     if (!user) return null;
+    const reference = firestore.collection('support').doc(user.uid).collection('tickets').doc();
     const ticket = { ...data, user_id: user.uid, email: user.email || '' };
-    const reference = await firestore.collection('support').doc(user.uid).collection('tickets').add(ticket);
+    await reference.set(ticket);
     return { id: reference.id, ...ticket };
   },
 
@@ -130,7 +131,7 @@ const sb = {
   async getSupportTickets(userId) {
     if (!firebaseAuth.currentUser || userId !== firebaseAuth.currentUser.uid) return [];
     const snapshot = await firestore.collection('support').doc(userId).collection('tickets').orderBy('created_at', 'desc').limit(10).get();
-    return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    return snapshot.docs.map((doc) => ({ id: doc.id, path: doc.ref.path, ...doc.data() }));
   },
 
   async getAdminTickets() {
@@ -148,9 +149,14 @@ const sb = {
 
   async closeSupportTicket(ticket) {
     const user = firebaseAuth.currentUser;
-    if (!user || !ticket?.path || ticket.user_id !== user.uid || ticket.status === 'closed') return false;
-    await firestore.doc(ticket.path).update({ status: 'closed', closed_at: new Date().toISOString() });
-    return true;
+    if (!user || !ticket?.path || ticket.user_id !== user.uid || ticket.status === 'closed') return { ok: false, reason: 'Chamado inválido ou já encerrado.' };
+    try {
+      await firestore.doc(ticket.path).update({ status: 'closed', closed_at: new Date().toISOString() });
+      return { ok: true };
+    } catch (error) {
+      Security.log('Support ticket close failed', { message: error.message });
+      return { ok: false, reason: error.message || 'Falha de permissão ou conexão.' };
+    }
   },
 
   async clearProgress(userId) {

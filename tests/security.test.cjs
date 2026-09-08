@@ -44,11 +44,14 @@ test('Support tickets are restricted to the authenticated owner', () => {
   assert.match(rules, /request\.resource\.data\.user_id == userId/);
   assert.match(rules, /request\.resource\.data\.category in \['bug', 'account', 'progress', 'suggestion', 'other'\]/);
   assert.match(rules, /description\.size\(\) <= 2000/);
+  assert.match(rules, /request\.resource\.data\.evidence is list/);
   assert.match(rules, /allow update, delete: if false/);
   assert.match(rules, /request\.auth\.token\.email == 'guilhermealisson14@hotmail\.com'/);
   assert.match(rules, /request\.auth\.token\.email_verified == true/);
   assert.match(rules, /request\.resource\.data\.status == 'closed'/);
   assert.match(rules, /resource\.data\.status != 'closed'/);
+  assert.match(model, /path: doc\.ref\.path/);
+  assert.match(model, /Support ticket close failed/);
 });
 
 test('Support email uses configured EmailJS public integration', () => {
@@ -62,6 +65,7 @@ test('Support email uses configured EmailJS public integration', () => {
   assert.match(model, /reply_to: ticket\.email/);
   assert.match(model, /reason: error\.text/);
 });
+
 
 test('CSP and security headers are defined for static hosting', () => {
   assert.match(html, /security\.js/);

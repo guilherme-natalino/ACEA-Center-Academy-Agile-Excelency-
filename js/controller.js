@@ -844,6 +844,16 @@ async function submitSupportTicket(event) {
     errorElement.classList.add('show');
     return;
   }
+  if (files.length > 3) {
+    errorElement.textContent = 'Anexe no máximo 3 arquivos.';
+    errorElement.classList.add('show');
+    return;
+  }
+  if (files.some((file) => !['image/png', 'image/jpeg', 'image/webp', 'application/pdf'].includes(file.type) || file.size > 5 * 1024 * 1024)) {
+    errorElement.textContent = 'Use imagens ou PDF de até 5 MB cada.';
+    errorElement.classList.add('show');
+    return;
+  }
 
   if (submitButton) {
     submitButton.disabled = true;
