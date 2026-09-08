@@ -2,6 +2,19 @@
 // Business data/rules live in model.js. DOM rendering lives in view.js.
 
 let pendingDataChoice = null;
+let notificationTimer = null;
+let appNotifications = [];
+
+// Repairs the known owner profile identity without affecting other accounts.
+function normalizeOwnerIdentity() {
+  if (!currentUser || currentUser.email.toLowerCase() !== 'guilhermealisson14@hotmail.com') return false;
+  const changed = profile.nome !== 'Guilherme' || profile.sobrenome !== 'Natalino';
+  if (changed) {
+    profile.nome = 'Guilherme';
+    profile.sobrenome = 'Natalino';
+  }
+  return changed;
+}
 
 // Opens the account menu for an authenticated user.
 function showAuthMenu() {
@@ -12,7 +25,7 @@ function showAuthMenu() {
 
   const first = String(profile.nome || '').trim().charAt(0);
   const last = String(profile.sobrenome || '').trim().charAt(0);
-  const initials = (first + last || String(currentUser.email || 'GM').slice(0, 2)).toUpperCase();
+  const initials = `${first || '?'}${last || '?'}`.toUpperCase();
   const displayName = [profile.nome, profile.sobrenome].filter(Boolean).join(' ') || 'Conta conectada';
   const analyticsEnabled = Boolean(profile.analyticsConsent);
 
@@ -55,6 +68,51 @@ function showAuthMenu() {
     </div>`;
 
   openModal();
+}
+
+function renderNotifications() {
+  const list = appNotifications.length
+    ? appNotifications.map((item) => `<div class="notification-item"><b>${esc(item.title)}</b><p>${esc(item.message)}</p></div>`).join('')
+    : '<div class="empty">Nenhuma notificação nova.</div>';
+  document.getElementById('modalBody').innerHTML = `<div class="notification-panel"><h2>Notificações</h2>${list}<button class="account-cancel" type="button" data-action="close-modal">Fechar</button></div>`;
+  appNotifications = [];
+  updateNotificationBadge();
+  openModal();
+}
+
+function updateNotificationBadge() {
+  const badge = document.getElementById('notificationCount');
+  if (!badge) return;
+  badge.textContent = String(appNotifications.length);
+  badge.hidden = appNotifications.length === 0;
+}
+
+async function pollNotifications() {
+  if (!currentUser) return;
+  try {
+    if (isAdminUser()) {
+      const tickets = await sb.getAdminTickets();
+      const key = 'admin-notification-tickets';
+      const previous = JSON.parse(localStorage.getItem(key) || '[]');
+      const current = tickets.map((ticket) => ticket.id);
+      if (previous.length) tickets.filter((ticket) => !previous.includes(ticket.id)).forEach((ticket) => appNotifications.push({ title: 'Novo chamado', message: `${ticket.subject} · ${ticket.email}` }));
+      localStorage.setItem(key, JSON.stringify(current));
+    } else {
+      const tickets = await sb.getSupportTickets(currentUser.id);
+      const key = `support-notification-responses-${currentUser.id}`;
+      const previous = JSON.parse(localStorage.getItem(key) || '{}');
+      const current = {};
+      tickets.forEach((ticket) => {
+        const marker = `${ticket.status || ''}:${ticket.response || ''}`;
+        current[ticket.id] = marker;
+        if (previous[ticket.id] && previous[ticket.id] !== marker && ticket.response) appNotifications.push({ title: 'Chamado respondido', message: ticket.subject });
+      });
+      localStorage.setItem(key, JSON.stringify(current));
+    }
+    updateNotificationBadge();
+  } catch (error) {
+    Security.log('Notification polling failed', { message: error.message });
+  }
 }
 
 // Opens the login/register dialog with no inline event handlers or inline CSS.
@@ -231,14 +289,23 @@ function hasProgress(data) {
 function showDataChoice(cloudData, sessionProfile) {
   pendingDataChoice = { cloudData, sessionProfile };
   document.getElementById('modalBody').innerHTML = `
-    <div class="modal-content data-choice">
-      <h2>Escolha seu progresso</h2>
-      <p class="muted small modal-intro">Encontramos dados salvos na nuvem e progresso nesta sessão.</p>
-      <div class="data-choice-actions">
-        <button class="btn" type="button" data-action="use-cloud-data">Continuar com a nuvem</button>
-        <button class="btn secondary" type="button" data-action="keep-session-data">Manter esta sessão</button>
+    <div class="data-choice">
+      <div class="data-choice-icon">⇄</div>
+      <div class="data-choice-heading">
+        <span class="eyebrow">SINCRONIZAÇÃO</span>
+        <h2>Escolha o progresso</h2>
+        <p>Encontramos duas versões da sua jornada. Escolha qual deve continuar na conta.</p>
       </div>
-      <p class="muted tiny">A opção escolhida será usada para esta conta. O progresso não escolhido não será enviado.</p>
+      <div class="data-choice-actions">
+        <button class="data-choice-option data-choice-option--primary" type="button" data-action="use-cloud-data">
+          <span class="data-choice-option-icon">☁</span><span><b>Usar progresso da nuvem</b><small>Continuar de onde você parou em outros dispositivos.</small></span><strong>›</strong>
+        </button>
+        <button class="data-choice-option" type="button" data-action="keep-session-data">
+          <span class="data-choice-option-icon">◷</span><span><b>Manter esta sessão</b><small>Usar apenas o progresso feito agora neste dispositivo.</small></span><strong>›</strong>
+        </button>
+      </div>
+      <p class="data-choice-note">A escolha será aplicada a esta conta. O progresso não escolhido não será enviado.</p>
+      <button class="account-cancel" type="button" data-action="close-modal">Decidir depois</button>
     </div>`;
   openModal();
 }
@@ -253,6 +320,7 @@ async function resolveDataChoice(choice) {
     profile = selection.sessionProfile;
     await syncToCloud();
   }
+  if (normalizeOwnerIdentity()) await syncToCloud();
   closeModal();
   renderHome();
   renderProfile();
@@ -273,6 +341,15 @@ function closeModal() {
   modal.classList.remove('show');
   modal.setAttribute('aria-hidden', 'true');
 }
+
+// Allows users to close ticket details with Escape or by clicking the backdrop.
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeModal();
+});
+
+document.getElementById('modal')?.addEventListener('click', (event) => {
+  if (event.target.id === 'modal') closeModal();
+});
 
 // Switches between login and registration modes in the authentication dialog.
 function setAuthMode(mode) {
@@ -346,6 +423,7 @@ async function submitAuth() {
       }
     }
 
+    if (normalizeOwnerIdentity()) await syncToCloud();
     closeModal();
     toast('✅ Bem-vindo, ' + email.split('@')[0] + '!');
     renderHome();
@@ -374,6 +452,10 @@ function friendlyAuthError(message) {
 async function doSignOut() {
   closeModal();
   await sb.signOut();
+  clearInterval(notificationTimer);
+  notificationTimer = null;
+  appNotifications = [];
+  updateNotificationBadge();
   currentUser = null;
   localStorage.removeItem('analytics-consent');
   setAnalyticsConsent(false);
@@ -397,7 +479,7 @@ function loadLocalProfile() {
 
 // Changes the visible application screen and renders only what that screen needs.
 function showScreen(id) {
-  const allowedScreens = new Set(['home', 'study', 'metrics', 'profile', 'support', 'quiz', 'result']);
+  const allowedScreens = new Set(['home', 'study', 'metrics', 'profile', 'support', 'admin', 'quiz', 'result']);
   const screenId = allowedScreens.has(id) ? id : 'home';
 
   document.querySelectorAll('.screen').forEach((screen) => {
@@ -414,6 +496,7 @@ function showScreen(id) {
   if (screenId === 'metrics') renderMetrics();
   if (screenId === 'profile') renderProfile();
   if (screenId === 'support') renderSupport();
+  if (screenId === 'admin') renderAdmin();
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -624,28 +707,50 @@ function studyGroup(encodedGroup) {
 }
 
 // Resets local and cloud progress after explicit user confirmation.
-function resetProgress() {
+async function resetProgress() {
   if (!confirm('Zerar todo o progresso?')) return;
 
-  if (currentUser) {
-    sb.upsertProfile({
-      user_id: currentUser.id,
-      level: 1,
-      xp: 0,
-      streak: 0,
-      best_streak: 0,
-      last_day: null,
-      total_answered: 0,
-      total_correct: 0,
-      recovered: 0,
-      achievements: {},
-      daily: {},
-      training_count: 0,
-      promotion_count: 0
-    });
+  const identity = {
+    nome: profile.nome,
+    sobrenome: profile.sobrenome,
+    unidade: profile.unidade,
+    analyticsConsent: profile.analyticsConsent,
+    consentVersion: profile.consentVersion,
+    consentAt: profile.consentAt
+  };
+
+  try {
+    if (currentUser) {
+      await sb.clearProgress(currentUser.id);
+      await sb.upsertProfile({
+        user_id: currentUser.id,
+        level: 1,
+        xp: 0,
+        streak: 0,
+        best_streak: 0,
+        last_day: null,
+        total_answered: 0,
+        total_correct: 0,
+        recovered: 0,
+        achievements: {},
+        daily: {},
+        training_count: 0,
+        promotion_count: 0,
+        nome: identity.nome,
+        sobrenome: identity.sobrenome,
+        unidade: identity.unidade,
+        analytics_consent: identity.analyticsConsent,
+        consent_version: identity.consentVersion,
+        consent_at: identity.consentAt
+      });
+    }
+  } catch (error) {
+    Security.log('Progress reset failed', { message: error.message });
+    toast('Não foi possível zerar o progresso agora.');
+    return;
   }
 
-  profile = defaultProfile();
+  profile = { ...defaultProfile(), ...identity };
   save();
   showScreen('home');
 }
@@ -674,6 +779,7 @@ document.addEventListener('click', (event) => {
     case 'next': nextQuestion(); break;
     case 'reset': resetProgress(); break;
     case 'auth-menu': currentUser ? showAuthMenu() : showAuthModal(); break;
+    case 'notifications': renderNotifications(); break;
     case 'auth-modal': showAuthModal(); break;
     case 'close-modal': closeModal(); break;
     case 'submit-auth': submitAuth(); break;
@@ -682,6 +788,8 @@ document.addEventListener('click', (event) => {
     case 'signout': doSignOut(); break;
     case 'study-concept': studyConcept(actionButton.dataset.c); break;
     case 'study-group': studyGroup(actionButton.dataset.group); break;
+    case 'open-support-ticket': openSupportTicket(actionButton.dataset.ticketId); break;
+    case 'admin-respond': respondToSupportTicket(actionButton.dataset.ticketId); break;
     case 'toggle-support-category': toggleSupportCategory(actionButton); break;
     case 'use-cloud-data': resolveDataChoice('cloud'); break;
     case 'keep-session-data': resolveDataChoice('session'); break;
@@ -755,8 +863,8 @@ async function submitSupportTicket(event) {
     document.getElementById('supportForm').reset();
     errorElement.className = 'auth-success show';
     errorElement.textContent = emailResult.sent
-      ? 'Chamado criado e enviado para nossa equipe por email.'
-      : 'Chamado criado com sucesso. Nossa equipe analisará sua solicitação.';
+      ? `Chamado #${response.id.slice(0, 8)} criado e enviado para nossa equipe por email.`
+      : `Chamado #${response.id.slice(0, 8)} criado no sistema, mas o email não foi enviado. Motivo: ${emailResult.reason || 'erro desconhecido'}`;
     renderSupportTickets();
   } catch (error) {
     Security.log('Support ticket submission failed', { message: error.message });
@@ -853,6 +961,10 @@ async function deleteAccount() {
   if (!currentUser || !confirm('Excluir sua conta e todos os seus dados? Esta ação não pode ser desfeita.')) return;
   try {
     await sb.deleteAccount(currentUser.id);
+    clearInterval(notificationTimer);
+    notificationTimer = null;
+    appNotifications = [];
+    updateNotificationBadge();
     currentUser = null;
     profile = defaultProfile();
     closeModal();
@@ -886,12 +998,16 @@ async function boot() {
     if (currentUser) {
       const loaded = await loadFromCloud();
       if (loaded) {
+        if (normalizeOwnerIdentity()) await syncToCloud();
         renderHome();
         renderProfile();
         renderMetrics();
         updateAll();
       }
     }
+    await pollNotifications();
+    clearInterval(notificationTimer);
+    notificationTimer = setInterval(pollNotifications, 60000);
   } catch (error) {
     Security.log('Boot failed', { message: error.message });
   }

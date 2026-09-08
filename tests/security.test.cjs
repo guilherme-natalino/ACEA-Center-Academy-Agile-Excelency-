@@ -31,13 +31,22 @@ test('Firebase configuration and user identifiers are validated', () => {
   assert.match(model, /Security\.safeFirebaseUid\(currentUser\.id\)/);
   assert.match(model, /firebaseAnalytics\.setAnalyticsCollectionEnabled/);
   assert.match(model, /async deleteAccount/);
+  assert.match(model, /async clearProgress/);
+});
+
+test('Third-party EmailJS SDK is pinned to an exact version', () => {
+  assert.match(html, /@emailjs\/browser@4\.4\.1\/dist\/email\.min\.js/);
 });
 
 test('Support tickets are restricted to the authenticated owner', () => {
   const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
   assert.match(rules, /match \/support\/{userId}\/tickets\/{ticketId}/);
   assert.match(rules, /request\.resource\.data\.user_id == userId/);
+  assert.match(rules, /request\.resource\.data\.category in \['bug', 'account', 'progress', 'suggestion', 'other'\]/);
+  assert.match(rules, /description\.size\(\) <= 2000/);
   assert.match(rules, /allow update, delete: if false/);
+  assert.match(rules, /request\.auth\.token\.email == 'guilhermealisson14@hotmail\.com'/);
+  assert.match(rules, /request\.auth\.token\.email_verified == true/);
 });
 
 test('Support email uses configured EmailJS public integration', () => {
@@ -48,6 +57,8 @@ test('Support email uses configured EmailJS public integration', () => {
   assert.match(model, /acaeacademiaagile@gmail\.com/);
   assert.match(model, /async sendSupportEmail/);
   assert.match(model, /emailjs\.send/);
+  assert.match(model, /reply_to: ticket\.email/);
+  assert.match(model, /reason: error\.text/);
 });
 
 test('CSP and security headers are defined for static hosting', () => {

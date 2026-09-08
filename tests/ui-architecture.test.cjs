@@ -89,6 +89,36 @@ test('Support area provides FAQ and authenticated ticket flow', () => {
   assert.match(view, /async function renderSupport/);
 });
 
+test('Requester can open a ticket and read the team response', () => {
+  assert.match(view, /openSupportTicket/);
+  assert.match(view, /ticket\.response/);
+  assert.match(view, /Aguardando atendimento/);
+  assert.match(controller, /open-support-ticket/);
+  assert.match(controller, /event\.key === 'Escape'/);
+  assert.match(controller, /event\.target\.id === 'modal'/);
+});
+
+test('Admin area is restricted and can respond to tickets', () => {
+  assert.match(html, /id="nav-admin"/);
+  assert.match(html, /id="admin"/);
+  assert.match(view, /function renderAdminAccess/);
+  assert.match(view, /async function renderAdmin/);
+  assert.match(view, /respondToSupportTicket/);
+  assert.match(model, /async getAdminTickets/);
+  assert.match(model, /async updateAdminTicket/);
+  assert.match(model, /guilhermealisson14@hotmail\.com/);
+  assert.match(view, /Admin tickets load failed/);
+  assert.match(styles, /\*\[hidden\] \{ display: none !important; \}/);
+});
+
+test('Notifications poll ticket creation and responses by user scope', () => {
+  assert.match(html, /data-action="notifications"/);
+  assert.match(controller, /async function pollNotifications/);
+  assert.match(controller, /isAdminUser\(\)/);
+  assert.match(controller, /Chamado respondido/);
+  assert.match(controller, /setInterval\(pollNotifications, 60000\)/);
+});
+
 test('Support ticket validation identifies the incomplete field', () => {
   assert.match(controller, /subject\.length < 3/);
   assert.match(controller, /description\.length < 15/);
@@ -145,6 +175,13 @@ test('Account creation requires data policy consent and offers progress choice',
   assert.doesNotMatch(model, /localStorage\.setItem\('agile-academy-v3'/);
 });
 
+test('Progress choice modal provides clear cloud and session options', () => {
+  assert.match(controller, /data-choice-option--primary/);
+  assert.match(controller, /Usar progresso da nuvem/);
+  assert.match(controller, /Manter esta sessão/);
+  assert.match(controller, /Decidir depois/);
+});
+
 test('Account button uses the logo for visitors and name initials for users', () => {
   assert.match(view, /function renderAccountIdentity/);
   assert.match(view, /avatar-person-icon/);
@@ -153,6 +190,15 @@ test('Account button uses the logo for visitors and name initials for users', ()
   assert.match(view, /profile\.sobrenome/);
   assert.match(model, /nome: profile\.nome/);
   assert.match(model, /sobrenome: profile\.sobrenome/);
+  assert.match(view, /\$\{first \|\| '\?'\}\$\{last \|\| '\?'\}/);
+  assert.match(controller, /\$\{first \|\| '\?'\}\$\{last \|\| '\?'\}/);
+});
+
+test('Owner account identity is normalized to the requested name', () => {
+  assert.match(controller, /guilhermealisson14@hotmail\.com/);
+  assert.match(controller, /profile\.nome = 'Guilherme'/);
+  assert.match(controller, /profile\.sobrenome = 'Natalino'/);
+  assert.match(controller, /normalizeOwnerIdentity/);
 });
 
 test('Privacy controls identify the official contact and isolate analytics consent', () => {

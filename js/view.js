@@ -233,8 +233,7 @@ function renderAccountIdentity() {
 
   const first = String(profile.nome || '').trim().charAt(0);
   const last = String(profile.sobrenome || '').trim().charAt(0);
-  const fallback = String(currentUser.email || 'GM').split('@')[0].slice(0, 2);
-  identity.textContent = (first + last || fallback).toUpperCase();
+  identity.textContent = `${first || '?'}${last || '?'}`.toUpperCase();
 }
 
 // Calculates promotion progress from the user's real answers and required groups.
@@ -406,6 +405,8 @@ function updateAll() {
   document.getElementById('xp').textContent = `${profile.xp} XP`;
   renderAuthStrip();
   renderJourneyMascots();
+  renderAccountIdentity();
+  renderAdminAccess();
 }
 
 // Adds a new achievement once and shows a short notification.
@@ -512,13 +513,78 @@ async function renderSupport() {
   await renderSupportTickets();
 }
 
+let supportTicketsCache = [];
+
 // Shows only tickets owned by the currently authenticated user.
 async function renderSupportTickets() {
   const container = document.getElementById('supportTickets');
   if (!container || !currentUser) return;
   const tickets = await sb.getSupportTickets(currentUser.id);
+  supportTicketsCache = tickets;
   container.innerHTML = tickets.length
     ? `<div class="section-title">Meus chamados</div><div class="support-ticket-list">${tickets.map((ticket) => `
-      <article class="support-ticket"><div><b>${esc(ticket.subject)}</b><small>${esc(ticket.category)} · ${esc(ticket.status)} · ${esc(ticket.created_at)}</small></div></article>`).join('')}</div>`
+      <button class="support-ticket" type="button" data-action="open-support-ticket" data-ticket-id="${esc(ticket.id)}"><span><b>${esc(ticket.subject)}</b><small>${esc(ticket.category)} · ${esc(ticket.status)} · ${esc(ticket.created_at)}</small></span><strong>›</strong></button>`).join('')}</div>`
     : '';
+}
+
+// Shows the admin navigation only for the verified owner account.
+function renderAdminAccess() {
+  const button = document.getElementById('nav-admin');
+  if (button) button.hidden = !isAdminUser();
+}
+
+// Renders all tickets for the restricted administrator and allows responses.
+async function renderAdmin() {
+  const container = document.getElementById('adminContent');
+  if (!container) return;
+  if (!isAdminUser()) {
+    container.innerHTML = '<div class="empty">Acesso não autorizado.</div>';
+    return;
+  }
+  container.innerHTML = '<div class="empty">Carregando chamados...</div>';
+  try {
+    const tickets = await sb.getAdminTickets();
+    window.adminTicketsCache = tickets;
+    container.innerHTML = tickets.length
+      ? tickets.map((ticket) => `
+        <article class="admin-ticket">
+          <div class="admin-ticket-meta"><span class="tag">${esc(ticket.status || 'open')}</span><span>${esc(ticket.category || '')}</span><span>${esc(ticket.email || '')}</span><small>${esc(ticket.created_at || '')}</small></div>
+          <h3>${esc(ticket.subject || '')}</h3>
+          <p>${esc(ticket.description || '')}</p>
+          <textarea class="admin-response" rows="4" data-ticket-response="${esc(ticket.id)}" placeholder="Escreva a resposta para o solicitante...">${esc(ticket.response || '')}</textarea>
+          <button class="btn" type="button" data-action="admin-respond" data-ticket-id="${esc(ticket.id)}">Salvar resposta</button>
+        </article>`).join('')
+      : '<div class="empty">Nenhum chamado encontrado.</div>';
+  } catch (error) {
+    Security.log('Admin tickets load failed', { message: error.message });
+    container.innerHTML = '<div class="auth-error show">Não foi possível carregar os chamados. Verifique se as regras Firestore atualizadas foram publicadas e se seu email está verificado.</div>';
+  }
+}
+
+async function respondToSupportTicket(ticketId) {
+  const ticket = (window.adminTicketsCache || []).find((item) => item.id === ticketId);
+  const field = document.querySelector(`[data-ticket-response="${CSS.escape(ticketId)}"]`);
+  if (!ticket || !field) return;
+  const response = field.value.trim();
+  if (response.length < 3) { toast('Escreva uma resposta antes de salvar.'); return; }
+  await sb.updateAdminTicket(ticket, response, 'answered');
+  toast('Resposta salva para o solicitante.');
+  renderAdmin();
+}
+
+// Opens the selected ticket with its description and the team's response.
+function openSupportTicket(ticketId) {
+  const ticket = supportTicketsCache.find((item) => item.id === ticketId);
+  if (!ticket) return;
+  const response = String(ticket.response || '').trim();
+  document.getElementById('modalBody').innerHTML = `
+    <div class="support-ticket-detail">
+      <div class="support-ticket-detail-head"><span class="tag">${esc(ticket.status || 'open')}</span><span>${esc(ticket.category || '')}</span></div>
+      <h2>${esc(ticket.subject)}</h2>
+      <small>${esc(ticket.created_at || '')}</small>
+      <div class="support-detail-block"><b>Descrição enviada</b><p>${esc(ticket.description || '')}</p></div>
+      <div class="support-detail-block support-response ${response ? 'has-response' : ''}"><b>Resposta da equipe</b><p>${response ? esc(response) : 'Aguardando atendimento da equipe.'}</p></div>
+      <button class="account-cancel" type="button" data-action="close-modal">Fechar</button>
+    </div>`;
+  openModal();
 }

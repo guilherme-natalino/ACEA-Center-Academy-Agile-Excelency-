@@ -12,6 +12,9 @@ const FIREBASE_CONFIG = Object.freeze({
   measurementId: 'G-DTSE13PL8X'
 });
 
+// Administrative access is also enforced by firestore.rules.
+const ADMIN_EMAIL = 'guilhermealisson14@hotmail.com';
+
 // EmailJS public configuration. Fill these IDs after creating the email template.
 const EMAILJS_CONFIG = Object.freeze({
   publicKey: 'c3jH0aW9Rzzdge_6F',
@@ -27,6 +30,7 @@ const firebaseAnalytics = firebase.analytics();
 firebaseAnalytics.setAnalyticsCollectionEnabled(false);
 if (EMAILJS_CONFIG.publicKey && window.emailjs) window.emailjs.init({ publicKey: EMAILJS_CONFIG.publicKey });
 const firebaseUser = (user) => user && user.uid ? { id: user.uid, email: user.email || '' } : null;
+const isAdminUser = () => Boolean(firebaseAuth.currentUser && firebaseAuth.currentUser.email === ADMIN_EMAIL && firebaseAuth.currentUser.emailVerified);
 
 const sb = {
   async signUp(email, pass) {
@@ -103,7 +107,7 @@ const sb = {
 
   async sendSupportEmail(ticket) {
     if (!window.emailjs || !EMAILJS_CONFIG.publicKey || !EMAILJS_CONFIG.serviceId || !EMAILJS_CONFIG.templateId) {
-      return { sent: false, configured: false };
+      return { sent: false, configured: false, reason: 'EmailJS não está configurado ou o SDK não carregou.' };
     }
     try {
       await window.emailjs.send(EMAILJS_CONFIG.serviceId, EMAILJS_CONFIG.templateId, {
@@ -113,12 +117,13 @@ const sb = {
         category: ticket.category,
         subject: ticket.subject,
         description: ticket.description,
-        created_at: ticket.created_at
+        created_at: ticket.created_at,
+        reply_to: ticket.email
       });
       return { sent: true, configured: true };
     } catch (error) {
       Security.log('Support email failed', { message: error.message });
-      return { sent: false, configured: true };
+      return { sent: false, configured: true, reason: error.text || error.message || 'EmailJS rejeitou o envio.' };
     }
   },
 
@@ -126,6 +131,44 @@ const sb = {
     if (!firebaseAuth.currentUser || userId !== firebaseAuth.currentUser.uid) return [];
     const snapshot = await firestore.collection('support').doc(userId).collection('tickets').orderBy('created_at', 'desc').limit(10).get();
     return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  },
+
+  async getAdminTickets() {
+    if (!isAdminUser()) return [];
+    const snapshot = await firestore.collectionGroup('tickets').get();
+    return snapshot.docs.map((doc) => ({ id: doc.id, path: doc.ref.path, ...doc.data() }))
+      .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
+  },
+
+  async updateAdminTicket(ticket, response, status) {
+    if (!isAdminUser() || !ticket?.path) return false;
+    await firestore.doc(ticket.path).update({ response: String(response || '').trim(), status, answered_at: new Date().toISOString() });
+    return true;
+  },
+
+  async clearProgress(userId) {
+    const user = firebaseAuth.currentUser;
+    if (!user || user.uid !== userId) return false;
+    const paths = [
+      firestore.collection('mastery').doc(userId).collection('concepts'),
+      firestore.collection('sessions').doc(userId).collection('items')
+    ];
+    for (const collection of paths) {
+      const snapshot = await collection.get();
+      let batch = firestore.batch();
+      let count = 0;
+      for (const document of snapshot.docs) {
+        batch.delete(document.ref);
+        count += 1;
+        if (count === 400) {
+          await batch.commit();
+          batch = firestore.batch();
+          count = 0;
+        }
+      }
+      if (count) await batch.commit();
+    }
+    return true;
   },
 
   async deleteAccount(userId) {
