@@ -155,6 +155,8 @@ button,a{font:inherit}
 .top-stat span { margin-right: 3px; }
 .top-stat b { font: 700 12px var(--mono); }
 .top-stat small { display: block; color: var(--muted); font-size: 8px; margin-top: 2px; }
+.streak-button { cursor: pointer; color: var(--text); font-family: inherit; }
+.streak-button:hover { border-color: var(--accent); background: rgba(91,130,255,.1); }
 
 .avatar-btn, .icon-btn {
   border: 1px solid var(--border2); background: var(--s2);
@@ -672,6 +674,20 @@ button,a{font:inherit}
 .notification-item { padding: 12px; margin-bottom: 8px; border: 1px solid var(--border); border-radius: 8px; background: rgba(91,130,255,.06); }
 .notification-item b, .notification-item p { display: block; }
 .notification-item p { margin: 4px 0 0; color: var(--muted); font-size: 11px; }
+.streak-calendar { padding: 24px; }
+.streak-calendar-head { display: flex; align-items: center; justify-content: space-between; }
+.streak-calendar-head h2 { margin: 3px 0 0; font-size: 21px; }
+.streak-fire { font-size: 32px; }
+.streak-calendar > p { margin: 12px 0 18px; line-height: 1.5; }
+.streak-week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
+.streak-day { min-height: 74px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; border: 1px solid var(--border); border-radius: 9px; color: var(--muted); background: rgba(255,255,255,.03); }
+.streak-day small { font-size: 9px; }
+.streak-day b { color: var(--text); font: 700 15px var(--mono); }
+.streak-day span { height: 16px; font-size: 13px; }
+.streak-day.is-active { border-color: rgba(255,190,80,.65); background: rgba(255,190,80,.1); }
+.streak-day.is-today { box-shadow: 0 0 0 2px var(--accent); }
+.streak-best { display: flex; justify-content: space-between; margin-top: 16px; padding-top: 13px; border-top: 1px solid var(--border); color: var(--muted); font-size: 11px; }
+.streak-best b { color: var(--text); font-family: var(--mono); }
 .consent-check { display: flex; align-items: flex-start; gap: 8px; color: var(--muted); font-size: 10px; line-height: 1.45; }
 .consent-check input { margin-top: 2px; accent-color: var(--accent); }
 .consent-check a { color: var(--accent); }

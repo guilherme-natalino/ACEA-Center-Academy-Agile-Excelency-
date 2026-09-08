@@ -80,7 +80,7 @@ test('Studies only render the practice button for concepts with questions', () =
 test('Support area provides FAQ and authenticated ticket flow', () => {
   assert.match(html, /id="nav-support"/);
   assert.match(html, /id="support"/);
-  assert.match(html, /FAC · Perguntas frequentes/);
+  assert.match(html, /FAQ · Perguntas frequentes/);
   assert.match(html, /id="supportForm"/);
   assert.match(controller, /async function submitSupportTicket/);
   assert.match(model, /async createSupportTicket/);
@@ -184,6 +184,15 @@ test('Progress choice modal provides clear cloud and session options', () => {
   assert.match(controller, /Usar progresso da nuvem/);
   assert.match(controller, /Manter esta sessão/);
   assert.match(controller, /Decidir depois/);
+});
+
+test('Streak calendar uses authenticated activity days and starts on Sunday', () => {
+  assert.match(view, /function renderStreakCalendar/);
+  assert.match(view, /const names = \['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'\]/);
+  assert.match(view, /profile\.activityDays/);
+  assert.match(controller, /streak-calendar/);
+  assert.match(model, /function recordActivity/);
+  assert.match(controller, /recordActivity\(\);/);
 });
 
 test('Account button uses the logo for visitors and name initials for users', () => {

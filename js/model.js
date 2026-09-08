@@ -326,6 +326,9 @@ const ACH=[
   ['streak5','🔥','5 em sequência','Acerte 5 questões consecutivas.'],
   ['streak10','🎯','Precisão cirúrgica','Acerte 10 questões consecutivas.'],
   ['streak7','📅','Constância','Estude por 7 dias seguidos.'],
+  ['streakDays5','🔥','Fogo inicial','Mantenha 5 dias de atividade.'],
+  ['streakDays10','🔥','Ritmo constante','Mantenha 10 dias de atividade.'],
+  ['streakDays50','🏆','Lenda da jornada','Mantenha 50 dias de atividade.'],
   ['explorer','🧭','Explorador','Pratique 5 competências diferentes.'],
   ['perfect','⭐','Sessão perfeita','Conclua uma sessão com 100% de acertos.'],
   ['recover10','🩹','Recuperador','Recupere 10 erros.'],
@@ -471,6 +474,7 @@ function defaultProfile() {
     consentVersion: null,
     consentAt: null,
     analyticsConsent: false,
+    activityDays: {},
     daily: { date: null, done: false, score: 0 }
   };
 }
@@ -487,13 +491,42 @@ function dayKey() {
 
 // Updates the streak when a new day is detected.
 function ensureDay() {
+  const days = Object.keys(profile.activityDays || {}).sort();
+  const last = days[days.length - 1];
+  if (!last) { profile.streak = 0; profile.lastDay = null; return; }
   const today = dayKey();
-  if (profile.lastDay !== today) {
-    const previousDay = profile.lastDay;
-    profile.streak = previousDay ? (isYesterday(previousDay, today) ? profile.streak + 1 : 1) : 1;
-    profile.bestStreak = Math.max(profile.bestStreak, profile.streak);
-    profile.lastDay = today;
+  const gap = Math.round((new Date(today + 'T12:00:00') - new Date(last + 'T12:00:00')) / 86400000);
+  if (gap >= 2) profile.streak = 0;
+  profile.lastDay = last;
+}
+
+// Records a real authenticated activity day and recalculates the current streak.
+function recordActivity() {
+  if (!currentUser) return;
+  const today = dayKey();
+  profile.activityDays[today] = true;
+  const days = Object.keys(profile.activityDays).sort();
+  let streak = 0;
+  let cursor = today;
+  for (let index = days.length - 1; index >= 0; index -= 1) {
+    if (days[index] !== cursor) break;
+    streak += 1;
+    const previous = new Date(cursor + 'T12:00:00');
+    previous.setDate(previous.getDate() - 1);
+    cursor = previous.getFullYear() + '-' + String(previous.getMonth() + 1).padStart(2, '0') + '-' + String(previous.getDate()).padStart(2, '0');
   }
+  profile.streak = streak;
+  profile.bestStreak = Math.max(profile.bestStreak, streak);
+  profile.lastDay = today;
+}
+
+// Applies streak milestones after a real authenticated use of the app.
+function checkActivityAchievements() {
+  if (!currentUser) return;
+  if (profile.streak >= 5) unlock('streakDays5');
+  if (profile.streak >= 7) unlock('streak7');
+  if (profile.streak >= 10) unlock('streakDays10');
+  if (profile.streak >= 50) unlock('streakDays50');
 }
 
 // Checks whether the second date is exactly one day after the first date.
@@ -575,6 +608,7 @@ async function syncToCloud() {
       sobrenome: profile.sobrenome,
       unidade: profile.unidade,
       analytics_consent: profile.analyticsConsent,
+      activity_days: profile.activityDays,
       consent_version: profile.consentVersion,
       consent_at: profile.consentAt
     });

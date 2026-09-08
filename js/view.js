@@ -409,6 +409,35 @@ function updateAll() {
   renderAdminAccess();
 }
 
+// Opens the current Sunday-to-Saturday activity calendar for authenticated users.
+function renderStreakCalendar() {
+  if (!currentUser) {
+    document.getElementById('modalBody').innerHTML = '<div class="streak-calendar"><h2>Seu streak</h2><p class="muted">Entre na sua conta para registrar dias de atividade e manter seu histórico.</p><button class="account-cancel" type="button" data-action="close-modal">Fechar</button></div>';
+    openModal();
+    return;
+  }
+
+  const today = new Date();
+  const sunday = new Date(today);
+  sunday.setDate(today.getDate() - today.getDay());
+  const names = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const days = names.map((name, index) => {
+    const date = new Date(sunday);
+    date.setDate(sunday.getDate() + index);
+    const key = date.getFullYear() + '-' + String(date.getMonth() + 1).padStart(2, '0') + '-' + String(date.getDate()).padStart(2, '0');
+    return { name, number: date.getDate(), key, active: Boolean(profile.activityDays?.[key]), today: key === dayKey() };
+  });
+  document.getElementById('modalBody').innerHTML = `
+    <div class="streak-calendar">
+      <div class="streak-calendar-head"><div><span class="eyebrow">ATIVIDADE</span><h2>${profile.streak} dias de streak</h2></div><span class="streak-fire">🔥</span></div>
+      <p class="muted small">Use a Academia Agile com sua conta para manter o fogo aceso. Dois dias sem praticar zeram o streak atual.</p>
+      <div class="streak-week">${days.map((day) => `<div class="streak-day ${day.active ? 'is-active' : ''} ${day.today ? 'is-today' : ''}"><small>${day.name}</small><b>${day.number}</b><span>${day.active ? '🔥' : '·'}</span></div>`).join('')}</div>
+      <div class="streak-best"><span>Maior sequência</span><b>${profile.bestStreak} dias</b></div>
+      <button class="account-cancel" type="button" data-action="close-modal">Fechar</button>
+    </div>`;
+  openModal();
+}
+
 // Adds a new achievement once and shows a short notification.
 function unlock(id) {
   if (profile.achievements[id]) return;

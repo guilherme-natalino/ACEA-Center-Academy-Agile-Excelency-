@@ -540,6 +540,7 @@ function answer(button) {
 
   masteryData.last = Date.now();
   profile.totalAnswered += 1;
+  recordActivity();
 
   const correctIndex = order[correctPosition];
   const answerIndex = order[position];
@@ -576,6 +577,9 @@ function answer(button) {
   if (state.sessionStreak >= 5) unlock('streak5');
   if (state.sessionStreak >= 10) unlock('streak10');
   if (profile.streak >= 7) unlock('streak7');
+  if (profile.streak >= 5) unlock('streakDays5');
+  if (profile.streak >= 10) unlock('streakDays10');
+  if (profile.streak >= 50) unlock('streakDays50');
   if (startedCompetencies() >= 5) unlock('explorer');
   if (masteryPct(question.concept) >= 90) unlock('master90');
   if (masteryPct(question.concept) - previousPercentage >= 30) unlock('turnaround');
@@ -780,6 +784,7 @@ document.addEventListener('click', (event) => {
     case 'reset': resetProgress(); break;
     case 'auth-menu': currentUser ? showAuthMenu() : showAuthModal(); break;
     case 'notifications': renderNotifications(); break;
+    case 'streak-calendar': renderStreakCalendar(); break;
     case 'auth-modal': showAuthModal(); break;
     case 'close-modal': closeModal(); break;
     case 'submit-auth': submitAuth(); break;
@@ -1010,6 +1015,9 @@ async function boot() {
       const loaded = await loadFromCloud();
       if (loaded) {
         if (normalizeOwnerIdentity()) await syncToCloud();
+        recordActivity();
+        checkActivityAchievements();
+        save();
         renderHome();
         renderProfile();
         renderMetrics();

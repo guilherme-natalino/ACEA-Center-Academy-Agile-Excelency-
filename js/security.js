@@ -116,6 +116,7 @@ const Security = (() => {
       quizSeen: {},
       trainingCount: 0,
       promotionCount: 0,
+      activityDays: {},
       daily: { date: null, done: false, score: 0 }
     };
 
@@ -140,6 +141,7 @@ const Security = (() => {
       sobrenome: typeof source?.sobrenome === 'string' ? source.sobrenome.slice(0, 60) : '',
       unidade: typeof source?.unidade === 'string' ? source.unidade.slice(0, 60) : '',
       analyticsConsent: Boolean(source?.analyticsConsent ?? source?.analytics_consent),
+      activityDays: sanitizeMap(source?.activityDays ?? source?.activity_days, fallback.activityDays || {}, 2000),
       consentVersion: typeof (source?.consentVersion ?? source?.consent_version) === 'string'
         ? (source?.consentVersion ?? source?.consent_version).slice(0, 20) : null,
       consentAt: typeof (source?.consentAt ?? source?.consent_at) === 'string'
