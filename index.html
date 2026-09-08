@@ -48,6 +48,10 @@
         <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
         <span>Perfil</span>
       </button>
+      <button id="nav-support" type="button" data-screen="support" aria-label="Ajuda e SAC">
+        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.5 9a2.5 2.5 0 1 1 4.3 1.7c-1 .9-1.8 1.3-1.8 2.8"/><path d="M12 17h.01"/></svg>
+        <span>Ajuda</span>
+      </button>
     </nav>
   </header>
 
@@ -150,6 +154,49 @@
       <div class="actions profile-actions"><button class="btn ghost" type="button" data-action="reset">↻ Zerar progresso</button></div>
     </section>
 
+    <section class="screen" id="support">
+      <div class="hero"><h1>🛟 Ajuda e SAC</h1><p>Encontre respostas rápidas ou envie um chamado para nossa equipe.</p></div>
+      <div class="section-title">FAC · Perguntas frequentes</div>
+      <div class="faq-list">
+        <details class="faq-item"><summary>Como meu progresso é salvo?</summary><p>Sem login, o progresso fica apenas nesta sessão. Depois de entrar, ele é salvo na sua conta e sincronizado na nuvem.</p></details>
+        <details class="faq-item"><summary>Por que o botão Praticar não aparece?</summary><p>O botão aparece somente depois que você responder alguma pergunta daquele assunto. Antes disso, o indicador permanece em 0/0.</p></details>
+        <details class="faq-item"><summary>Como recuperar minha senha?</summary><p>Abra o menu de login, informe seu email e selecione “Esqueci minha senha”. Você receberá um link de redefinição.</p></details>
+        <details class="faq-item"><summary>O que o Analytics coleta?</summary><p>Com seu consentimento opcional, o Analytics coleta métricas de uso, como telas acessadas e interações, para orientar melhorias. Ele não é necessário para estudar ou salvar seu progresso.</p></details>
+        <details class="faq-item"><summary>Como excluir minha conta?</summary><p>Abra o menu da sua conta, selecione “Excluir conta” e confirme. A conta e os dados associados serão removidos.</p></details>
+      </div>
+      <div class="section-title">SAC · Abrir chamado</div>
+      <div id="support-auth-state"></div>
+      <form class="support-form" id="supportForm">
+        <label class="auth-label" for="supportCategory">Categoria</label>
+        <div class="support-combobox">
+          <button class="support-combobox-trigger" type="button" data-action="toggle-support-category" aria-haspopup="listbox" aria-expanded="false">
+            <span class="support-category-icon">🐞</span><span id="supportCategoryLabel">Reportar bug</span><span class="support-combobox-chevron">⌄</span>
+          </button>
+          <div class="support-combobox-menu" id="supportCategoryMenu" role="listbox" hidden>
+            <button type="button" data-support-value="bug" role="option"><span>🐞</span><span><b>Reportar bug</b><small>Algo não está funcionando</small></span></button>
+            <button type="button" data-support-value="account" role="option"><span>👤</span><span><b>Conta e acesso</b><small>Login, senha ou cadastro</small></span></button>
+            <button type="button" data-support-value="progress" role="option"><span>📊</span><span><b>Progresso e métricas</b><small>Dados, domínio ou conquistas</small></span></button>
+            <button type="button" data-support-value="suggestion" role="option"><span>💡</span><span><b>Sugestão de melhoria</b><small>Ideias para evoluir a plataforma</small></span></button>
+            <button type="button" data-support-value="other" role="option"><span>💬</span><span><b>Outro assunto</b><small>Uma dúvida diferente</small></span></button>
+          </div>
+          <select id="supportCategory" class="support-category-hidden" aria-hidden="true" tabindex="-1">
+            <option value="bug">Reportar bug</option>
+            <option value="account">Conta e acesso</option>
+            <option value="progress">Progresso e métricas</option>
+            <option value="suggestion">Sugestão de melhoria</option>
+            <option value="other">Outro assunto</option>
+          </select>
+        </div>
+        <label class="auth-label" for="supportSubject">Assunto</label>
+        <input class="auth-input support-input" id="supportSubject" type="text" maxlength="120" placeholder="Descreva o problema em poucas palavras">
+        <label class="auth-label" for="supportDescription">Descrição</label>
+        <textarea class="auth-input support-textarea" id="supportDescription" maxlength="2000" rows="6" placeholder="Conte o que aconteceu, quando aconteceu e como podemos reproduzir."></textarea>
+        <div id="supportError" class="auth-error" role="alert"></div>
+        <button class="auth-submit" type="submit"><span>Enviar chamado</span><span aria-hidden="true">→</span></button>
+      </form>
+      <div id="supportTickets"></div>
+    </section>
+
     <section class="screen" id="quiz">
       <div id="examBanner"></div>
       <div class="qtop">
@@ -172,9 +219,11 @@
     </div>
   </div>
 
+  <script src="https://cdn.jsdelivr.net/npm/@emailjs/browser@4/dist/email.min.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-analytics-compat.js"></script>
   <script src="js/security.js"></script>
   <script src="js/model.js"></script>
   <script src="js/view.js"></script>

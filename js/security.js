@@ -139,6 +139,7 @@ const Security = (() => {
       nome: typeof source?.nome === 'string' ? source.nome.slice(0, 60) : '',
       sobrenome: typeof source?.sobrenome === 'string' ? source.sobrenome.slice(0, 60) : '',
       unidade: typeof source?.unidade === 'string' ? source.unidade.slice(0, 60) : '',
+      analyticsConsent: Boolean(source?.analyticsConsent ?? source?.analytics_consent),
       consentVersion: typeof (source?.consentVersion ?? source?.consent_version) === 'string'
         ? (source?.consentVersion ?? source?.consent_version).slice(0, 20) : null,
       consentAt: typeof (source?.consentAt ?? source?.consent_at) === 'string'

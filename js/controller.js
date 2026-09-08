@@ -10,14 +10,48 @@ function showAuthMenu() {
     return;
   }
 
+  const first = String(profile.nome || '').trim().charAt(0);
+  const last = String(profile.sobrenome || '').trim().charAt(0);
+  const initials = (first + last || String(currentUser.email || 'GM').slice(0, 2)).toUpperCase();
+  const displayName = [profile.nome, profile.sobrenome].filter(Boolean).join(' ') || 'Conta conectada';
+  const analyticsEnabled = Boolean(profile.analyticsConsent);
+
   document.getElementById('modalBody').innerHTML = `
-    <div class="modal-content">
-      <h2>☁️ Conta conectada</h2>
-      <p class="muted small modal-intro">${esc(currentUser.email || '')}</p>
-      <div class="actions">
-        <button class="btn secondary" type="button" data-action="signout">Sair da conta</button>
-        <button class="btn ghost" type="button" data-action="close-modal">Cancelar</button>
+    <div class="account-panel">
+      <div class="account-header">
+        <div class="account-avatar">${esc(initials)}</div>
+        <div class="account-identity">
+          <h2>${esc(displayName)}</h2>
+          <p>${esc(currentUser.email || '')}</p>
+        </div>
+        <span class="account-status"><i></i> Ativo</span>
       </div>
+
+      <div class="account-section-label">CONTA</div>
+      <div class="analytics-panel">
+        <div class="analytics-heading">
+          <span class="account-action-icon analytics-icon">⌁</span>
+          <div>
+            <b>Analytics de uso</b>
+            <p>Ajuda a entender quais telas são usadas e onde melhorar a plataforma.</p>
+          </div>
+          <span class="analytics-state">${analyticsEnabled ? 'Ativo' : 'Desativado'}</span>
+        </div>
+        <p class="analytics-detail">Coleta métricas de navegação e interação. Não é necessário para estudar, salvar progresso ou usar sua conta.</p>
+        <button class="analytics-toggle ${analyticsEnabled ? 'is-on' : ''}" type="button" data-action="toggle-analytics" aria-pressed="${analyticsEnabled}">
+          <span class="toggle-track"><i></i></span>
+          <span>${analyticsEnabled ? 'Desativar Analytics' : 'Ativar Analytics'}</span>
+        </button>
+      </div>
+
+      <div class="account-divider"></div>
+      <button class="account-action account-action--danger" type="button" data-action="delete-account">
+        <span class="account-action-icon">⌫</span><span><b>Excluir conta</b><small>Remove sua conta e seus dados salvos</small></span><span class="account-chevron">›</span>
+      </button>
+      <button class="account-action" type="button" data-action="signout">
+        <span class="account-action-icon">↪</span><span><b>Sair da conta</b><small>Encerrar esta sessão neste dispositivo</small></span><span class="account-chevron">›</span>
+      </button>
+      <button class="account-cancel" type="button" data-action="close-modal">Cancelar</button>
     </div>`;
 
   openModal();
@@ -55,6 +89,7 @@ function showAuthModal() {
             <input class="auth-input" id="aPass" type="password" placeholder="Mínimo de 8 caracteres" autocomplete="current-password" minlength="8" maxlength="128">
           </div>
         </div>
+        <button class="auth-link" type="button" data-action="forgot-password">Esqueci minha senha</button>
         <div id="aErr" class="auth-error" role="alert"></div>
         <button class="auth-submit" id="aBtn" type="button" data-action="submit-auth">
           <span>Entrar</span>
@@ -146,6 +181,14 @@ function showAuthModal() {
           <input id="rConsent" type="checkbox">
           <span>Li e aceito a <a href="data-policy.html" target="_blank" rel="noopener noreferrer">Política de Privacidade e Termos de Uso</a>.</span>
         </label>
+        <label class="consent-check" for="rAdult">
+          <input id="rAdult" type="checkbox">
+          <span>Confirmo que tenho 18 anos ou mais.</span>
+        </label>
+        <label class="consent-check" for="rAnalytics">
+          <input id="rAnalytics" type="checkbox">
+          <span>Concordo opcionalmente com o uso de métricas de navegação para melhorar a plataforma.</span>
+        </label>
         <div id="rErr" class="auth-error" role="alert"></div>
         <button class="auth-submit" id="rBtn" type="button" data-action="submit-register">
           <span>Criar minha conta</span>
@@ -156,6 +199,27 @@ function showAuthModal() {
 
   openModal();
   window._authMode = 'login';
+}
+
+// Sends a password reset email without revealing whether the address is registered.
+async function forgotPassword() {
+  const email = Security.safeEmail(document.getElementById('aEmail')?.value);
+  const errorElement = document.getElementById('aErr');
+  if (!email) {
+    errorElement.textContent = 'Informe um email válido para receber o link de recuperação.';
+    errorElement.classList.add('show');
+    return;
+  }
+
+  const response = await sb.resetPassword(email);
+  if (response.error && !/user-not-found/i.test(response.error.message || '')) {
+    errorElement.textContent = 'Não foi possível enviar o email agora. Tente novamente.';
+    errorElement.classList.add('show');
+    return;
+  }
+
+  errorElement.className = 'auth-success show';
+  errorElement.textContent = 'Se o email estiver cadastrado, você receberá um link para redefinir a senha.';
 }
 
 // Reports whether a profile contains meaningful study progress.
@@ -311,6 +375,8 @@ async function doSignOut() {
   closeModal();
   await sb.signOut();
   currentUser = null;
+  localStorage.removeItem('analytics-consent');
+  setAnalyticsConsent(false);
   profile = defaultProfile();
   renderHome();
   renderProfile();
@@ -331,7 +397,7 @@ function loadLocalProfile() {
 
 // Changes the visible application screen and renders only what that screen needs.
 function showScreen(id) {
-  const allowedScreens = new Set(['home', 'study', 'metrics', 'profile', 'quiz', 'result']);
+  const allowedScreens = new Set(['home', 'study', 'metrics', 'profile', 'support', 'quiz', 'result']);
   const screenId = allowedScreens.has(id) ? id : 'home';
 
   document.querySelectorAll('.screen').forEach((screen) => {
@@ -347,6 +413,7 @@ function showScreen(id) {
   if (screenId === 'study') renderStudy();
   if (screenId === 'metrics') renderMetrics();
   if (screenId === 'profile') renderProfile();
+  if (screenId === 'support') renderSupport();
 
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
@@ -592,6 +659,11 @@ document.addEventListener('click', (event) => {
   }
 
   const actionButton = event.target.closest('[data-action]');
+  const categoryOption = event.target.closest('[data-support-value]');
+  if (categoryOption) {
+    selectSupportCategory(categoryOption.dataset.supportValue, categoryOption);
+    return;
+  }
   if (!actionButton) return;
 
   switch (actionButton.dataset.action) {
@@ -605,16 +677,100 @@ document.addEventListener('click', (event) => {
     case 'auth-modal': showAuthModal(); break;
     case 'close-modal': closeModal(); break;
     case 'submit-auth': submitAuth(); break;
+    case 'forgot-password': forgotPassword(); break;
     case 'submit-register': submitRegister(); break;
     case 'signout': doSignOut(); break;
     case 'study-concept': studyConcept(actionButton.dataset.c); break;
     case 'study-group': studyGroup(actionButton.dataset.group); break;
+    case 'toggle-support-category': toggleSupportCategory(actionButton); break;
     case 'use-cloud-data': resolveDataChoice('cloud'); break;
     case 'keep-session-data': resolveDataChoice('session'); break;
+    case 'toggle-analytics': toggleAnalytics(); break;
+    case 'delete-account': deleteAccount(); break;
     case 'answer': answer(actionButton); break;
     default: break;
   }
 });
+
+function toggleSupportCategory(trigger) {
+  const menu = document.getElementById('supportCategoryMenu');
+  if (!menu) return;
+  const isOpen = !menu.hidden;
+  menu.hidden = isOpen;
+  trigger.setAttribute('aria-expanded', String(!isOpen));
+}
+
+function selectSupportCategory(value, option) {
+  const select = document.getElementById('supportCategory');
+  const label = document.getElementById('supportCategoryLabel');
+  const trigger = document.querySelector('.support-combobox-trigger');
+  const menu = document.getElementById('supportCategoryMenu');
+  const icon = option?.querySelector('span');
+  const text = option?.querySelector('b');
+  if (!select || !label || !trigger || !menu) return;
+  select.value = value;
+  label.textContent = text?.textContent || value;
+  const triggerIcon = trigger.querySelector('.support-category-icon');
+  if (triggerIcon && icon) triggerIcon.textContent = icon.textContent;
+  menu.hidden = true;
+  trigger.setAttribute('aria-expanded', 'false');
+}
+
+// Sends a support ticket after validating the authenticated user's input.
+async function submitSupportTicket(event) {
+  event.preventDefault();
+  const errorElement = document.getElementById('supportError');
+  const submitButton = document.querySelector('#supportForm button[type="submit"]');
+  const subject = document.getElementById('supportSubject').value.trim();
+  const description = document.getElementById('supportDescription').value.trim();
+  if (!currentUser) return;
+  errorElement.className = 'auth-error';
+  if (subject.length < 3) {
+    errorElement.textContent = 'Informe um assunto com pelo menos 3 caracteres.';
+    errorElement.classList.add('show');
+    return;
+  }
+  if (description.length < 15) {
+    errorElement.textContent = 'Descreva o problema com pelo menos 15 caracteres.';
+    errorElement.classList.add('show');
+    return;
+  }
+
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.querySelector('span').textContent = 'Enviando...';
+  }
+
+  try {
+    const response = await sb.createSupportTicket({
+      category: document.getElementById('supportCategory').value,
+      subject,
+      description,
+      status: 'open',
+      created_at: new Date().toISOString()
+    });
+    if (!response) throw new Error('Não foi possível salvar o chamado.');
+
+    const emailResult = await sb.sendSupportEmail(response);
+    document.getElementById('supportForm').reset();
+    errorElement.className = 'auth-success show';
+    errorElement.textContent = emailResult.sent
+      ? 'Chamado criado e enviado para nossa equipe por email.'
+      : 'Chamado criado com sucesso. Nossa equipe analisará sua solicitação.';
+    renderSupportTickets();
+  } catch (error) {
+    Security.log('Support ticket submission failed', { message: error.message });
+    errorElement.className = 'auth-error show';
+    errorElement.textContent = 'Não foi possível criar o chamado. Verifique sua conexão e tente novamente.';
+  } finally {
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.querySelector('span').textContent = 'Enviar chamado';
+    }
+  }
+}
+
+document.getElementById('supportForm')?.addEventListener('submit', submitSupportTicket);
 
 // Handles login/register mode changes in the authentication dialog.
 document.addEventListener('click', (event) => {
@@ -631,6 +787,8 @@ async function submitRegister() {
   const pass      = document.getElementById('rPass')?.value || '';
   const pass2     = document.getElementById('rPass2')?.value || '';
   const consent   = document.getElementById('rConsent')?.checked === true;
+  const adult     = document.getElementById('rAdult')?.checked === true;
+  const analytics = document.getElementById('rAnalytics')?.checked === true;
   const errorEl   = document.getElementById('rErr');
   const button    = document.getElementById('rBtn');
   const btnSpan   = button?.querySelector('span');
@@ -643,6 +801,7 @@ async function submitRegister() {
   if (!Security.validPassword(pass)) { errorEl.textContent = 'A senha deve ter entre 8 e 128 caracteres.'; errorEl.classList.add('show'); return; }
   if (pass !== pass2) { errorEl.textContent = 'As senhas não coincidem.'; errorEl.classList.add('show'); return; }
   if (!consent) { errorEl.textContent = 'Aceite a Política de Privacidade e os Termos de Uso para criar sua conta.'; errorEl.classList.add('show'); return; }
+  if (!adult) { errorEl.textContent = 'A Academia Agile é destinada apenas a pessoas maiores de 18 anos.'; errorEl.classList.add('show'); return; }
 
   if (btnSpan) btnSpan.textContent = 'Criando conta...';
   if (button) button.disabled = true;
@@ -661,6 +820,8 @@ async function submitRegister() {
       profile.unidade   = unidade;
       profile.consentVersion = '1.0';
       profile.consentAt = new Date().toISOString();
+      profile.analyticsConsent = analytics;
+      setAnalyticsConsent(analytics);
       localStorage.setItem('firebase_user', JSON.stringify(currentUser));
       await syncToCloud();
     }
@@ -676,6 +837,33 @@ async function submitRegister() {
   } finally {
     if (button) button.disabled = false;
     if (btnSpan) btnSpan.textContent = 'Criar minha conta';
+  }
+}
+
+// Changes optional analytics consent without affecting account functionality.
+async function toggleAnalytics() {
+  profile.analyticsConsent = !profile.analyticsConsent;
+  setAnalyticsConsent(profile.analyticsConsent);
+  await syncToCloud();
+  showAuthMenu();
+}
+
+// Deletes the authenticated account and all user-owned Firestore documents.
+async function deleteAccount() {
+  if (!currentUser || !confirm('Excluir sua conta e todos os seus dados? Esta ação não pode ser desfeita.')) return;
+  try {
+    await sb.deleteAccount(currentUser.id);
+    currentUser = null;
+    profile = defaultProfile();
+    closeModal();
+    renderHome();
+    renderProfile();
+    renderMetrics();
+    updateAll();
+    toast('Conta e dados excluídos.');
+  } catch (error) {
+    Security.log('Account deletion failed', { message: error.code || error.message });
+    toast('Não foi possível excluir agora. Faça login novamente e tente de novo.');
   }
 }
 

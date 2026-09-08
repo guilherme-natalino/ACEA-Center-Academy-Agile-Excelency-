@@ -12,22 +12,34 @@ service cloud.firestore {
 
     match /profiles/{userId} {
       allow read: if ownsUser(userId);
-      allow create, update: if ownsUser(userId)
+      allow create: if ownsUser(userId)
         && request.resource.data.user_id == userId;
-      allow delete: if false;
+      allow update: if ownsUser(userId)
+        && request.resource.data.user_id == userId
+        && request.resource.data.consent_version == resource.data.consent_version
+        && request.resource.data.consent_at == resource.data.consent_at;
+      allow delete: if ownsUser(userId);
     }
 
     match /mastery/{userId}/concepts/{conceptId} {
       allow read: if ownsUser(userId);
       allow create, update: if ownsUser(userId)
         && request.resource.data.user_id == userId;
-      allow delete: if false;
+      allow delete: if ownsUser(userId);
     }
 
     match /sessions/{userId}/items/{sessionId} {
       allow read: if ownsUser(userId);
       allow create: if ownsUser(userId)
         && request.resource.data.user_id == userId;
+      allow update, delete: if ownsUser(userId);
+    }
+
+    match /support/{userId}/tickets/{ticketId} {
+      allow read: if ownsUser(userId);
+      allow create: if ownsUser(userId)
+        && request.resource.data.user_id == userId
+        && request.resource.data.status == 'open';
       allow update, delete: if false;
     }
 

@@ -29,6 +29,25 @@ test('Firebase configuration and user identifiers are validated', () => {
   assert.match(model, /firebase\.firestore/);
   assert.match(security, /function safeFirebaseUid/);
   assert.match(model, /Security\.safeFirebaseUid\(currentUser\.id\)/);
+  assert.match(model, /firebaseAnalytics\.setAnalyticsCollectionEnabled/);
+  assert.match(model, /async deleteAccount/);
+});
+
+test('Support tickets are restricted to the authenticated owner', () => {
+  const rules = fs.readFileSync(path.join(root, 'firestore.rules'), 'utf8');
+  assert.match(rules, /match \/support\/{userId}\/tickets\/{ticketId}/);
+  assert.match(rules, /request\.resource\.data\.user_id == userId/);
+  assert.match(rules, /allow update, delete: if false/);
+});
+
+test('Support email uses configured EmailJS public integration', () => {
+  assert.match(model, /EMAILJS_CONFIG/);
+  assert.match(model, /c3jH0aW9Rzzdge_6F/);
+  assert.match(model, /service_q0pdy1n/);
+  assert.match(model, /template_vy1imab/);
+  assert.match(model, /acaeacademiaagile@gmail\.com/);
+  assert.match(model, /async sendSupportEmail/);
+  assert.match(model, /emailjs\.send/);
 });
 
 test('CSP and security headers are defined for static hosting', () => {
@@ -37,6 +56,9 @@ test('CSP and security headers are defined for static hosting', () => {
   assert.match(headers, /Content-Security-Policy/);
   assert.match(headers, /gstatic\.com/);
   assert.match(headers, /firestore\.googleapis\.com/);
+  assert.match(headers, /google-analytics\.com/);
+  assert.match(headers, /cdn\.jsdelivr\.net/);
+  assert.match(headers, /api\.emailjs\.com/);
   assert.match(headers, /X-Content-Type-Options: nosniff/);
   assert.match(headers, /Referrer-Policy/);
   assert.match(headers, /Permissions-Policy/);

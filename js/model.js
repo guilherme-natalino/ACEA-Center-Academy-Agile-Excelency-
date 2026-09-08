@@ -12,9 +12,20 @@ const FIREBASE_CONFIG = Object.freeze({
   measurementId: 'G-DTSE13PL8X'
 });
 
+// EmailJS public configuration. Fill these IDs after creating the email template.
+const EMAILJS_CONFIG = Object.freeze({
+  publicKey: 'c3jH0aW9Rzzdge_6F',
+  serviceId: 'service_q0pdy1n',
+  templateId: 'template_vy1imab',
+  recipient: 'acaeacademiaagile@gmail.com'
+});
+
 firebase.initializeApp(FIREBASE_CONFIG);
 const firebaseAuth = firebase.auth();
 const firestore = firebase.firestore();
+const firebaseAnalytics = firebase.analytics();
+firebaseAnalytics.setAnalyticsCollectionEnabled(false);
+if (EMAILJS_CONFIG.publicKey && window.emailjs) window.emailjs.init({ publicKey: EMAILJS_CONFIG.publicKey });
 const firebaseUser = (user) => user && user.uid ? { id: user.uid, email: user.email || '' } : null;
 
 const sb = {
@@ -26,6 +37,15 @@ const sb = {
   async signIn(email, pass) {
     try { return { user: firebaseUser((await firebaseAuth.signInWithEmailAndPassword(email, pass)).user) }; }
     catch (error) { return { error: { message: error.code || error.message } }; }
+  },
+
+  async resetPassword(email) {
+    try {
+      await firebaseAuth.sendPasswordResetEmail(email);
+      return { ok: true };
+    } catch (error) {
+      return { error: { message: error.code || error.message } };
+    }
   },
 
   async signOut() {
@@ -71,6 +91,74 @@ const sb = {
     if (!firebaseAuth.currentUser || userId !== firebaseAuth.currentUser.uid) return [];
     const snapshot = await firestore.collection('mastery').doc(userId).collection('concepts').get();
     return snapshot.docs.map((doc) => doc.data());
+  },
+
+  async createSupportTicket(data) {
+    const user = firebaseAuth.currentUser;
+    if (!user) return null;
+    const ticket = { ...data, user_id: user.uid, email: user.email || '' };
+    const reference = await firestore.collection('support').doc(user.uid).collection('tickets').add(ticket);
+    return { id: reference.id, ...ticket };
+  },
+
+  async sendSupportEmail(ticket) {
+    if (!window.emailjs || !EMAILJS_CONFIG.publicKey || !EMAILJS_CONFIG.serviceId || !EMAILJS_CONFIG.templateId) {
+      return { sent: false, configured: false };
+    }
+    try {
+      await window.emailjs.send(EMAILJS_CONFIG.serviceId, EMAILJS_CONFIG.templateId, {
+        to_email: EMAILJS_CONFIG.recipient,
+        from_email: ticket.email,
+        ticket_id: ticket.id,
+        category: ticket.category,
+        subject: ticket.subject,
+        description: ticket.description,
+        created_at: ticket.created_at
+      });
+      return { sent: true, configured: true };
+    } catch (error) {
+      Security.log('Support email failed', { message: error.message });
+      return { sent: false, configured: true };
+    }
+  },
+
+  async getSupportTickets(userId) {
+    if (!firebaseAuth.currentUser || userId !== firebaseAuth.currentUser.uid) return [];
+    const snapshot = await firestore.collection('support').doc(userId).collection('tickets').orderBy('created_at', 'desc').limit(10).get();
+    return snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+  },
+
+  async deleteAccount(userId) {
+    const user = firebaseAuth.currentUser;
+    if (!user || user.uid !== userId) return false;
+
+    const paths = [
+      firestore.collection('mastery').doc(userId).collection('concepts'),
+      firestore.collection('sessions').doc(userId).collection('items'),
+      firestore.collection('support').doc(userId).collection('tickets')
+    ];
+    for (const collection of paths) {
+      const snapshot = await collection.get();
+      let batch = firestore.batch();
+      let count = 0;
+      for (const document of snapshot.docs) {
+        batch.delete(document.ref);
+        count += 1;
+        if (count === 400) {
+          await batch.commit();
+          batch = firestore.batch();
+          count = 0;
+        }
+      }
+      if (count) await batch.commit();
+    }
+
+    await firestore.collection('profiles').doc(userId).delete();
+    await user.delete();
+    localStorage.removeItem('firebase_user');
+    localStorage.removeItem('analytics-consent');
+    firebaseAnalytics.setAnalyticsCollectionEnabled(false);
+    return true;
   }
 };
 
@@ -114,7 +202,7 @@ const BANK_RAW=[
 {diff:2,cat:"EBM",concept:"EBM - Current Value",q:"No EBM, o Current Value (CV) é representado por qual conjunto de métricas?",opts:["Velocity e story points","NPS, satisfação do cliente, receita e retenção","Frequência de deploy e Lead Time","Code coverage e dívida técnica"],ans:1,xp:25,exp:"CV mede o valor que o produto entrega HOJE. Métricas: NPS, taxa de retenção, CSAT, receita recorrente. CV é sempre visto pelos olhos do cliente — não do processo interno.",vid:{t:"EBM Current Value — KVA",u:"https://www.youtube.com/results?search_query=EBM+Current+Value+Scrum+KVA"}},
 {diff:2,cat:"Estatística",concept:"Média, mediana e outliers",q:"O que é a mediana de Cycle Time e por que é preferível à média?",opts:["Soma dividida pela quantidade","Valor central da distribuição ordenada — mais robusta que a média pois não é distorcida por outliers","Sempre igual ao P85","Útil só para distribuições simétricas"],ans:1,xp:25,exp:"Se 90% dos itens levam 5 dias e 10% levam 60 dias, a média pode ser 10 dias — representando poucos itens reais. A mediana (P50) representa melhor a experiência típica.",vid:{t:"Mean vs Median — Statistics for Agile",u:"https://www.youtube.com/results?search_query=mean+median+outliers+statistics+kanban"}},
 {diff:2,cat:"Estatística",concept:"Variabilidade",q:"Por que reduzir variabilidade do Cycle Time é mais valioso que reduzir a média?",opts:["A variabilidade é o número total de dias","Variabilidade (desvio-padrão) mede dispersão — alta variabilidade = previsões menos confiáveis, independente da média","A variabilidade é o número de outliers acima do P85","Variabilidade e média são indicadores equivalentes"],ans:1,xp:25,exp:"Um time que sempre entrega em 5-7 dias (baixa variabilidade) é mais previsível que um que entrega em 2 ou 20 dias (alta variabilidade), mesmo que ambos tenham a mesma média.",vid:{t:"Process Variability — Agile Flow",u:"https://www.youtube.com/results?search_query=process+variability+agile+flow+kanban"}},
-{diff:2,cat:"Kanban e Priorização",concept:"Política Expedite",q:"O que é a política Expedite no Kanban e quando usar?",opts:["Sprint para itens urgentes do PO","Classe de serviço para itens de altíssima urgência que PODEM violar WIP limits — reservada para emergências reais","Método de deploy rápido em produção","Cerimônia de priorização semanal"],ans:1,xp:25,exp:"Expedite é para emergências reais (incidente em produção, compliance crítico). Viola WIP limits e interrompe o fluxo. Deve ser raro — se todo item vira Expedite, a classe perde significado e o fluxo colapsa.",vid:{t:"Kanban Expedite Policy",u:"https://www.youtube.com/results?search_query=Kanban+Expedite+class+of+service"}},
+{diff:2,cat:"Kanban e Priorização",concept:"Política Expedite",q:"Em qual situação a classe Expedite pode ser usada no Kanban?",opts:["Para itens que podem esperar até a próxima revisão","Para itens urgentes que podem ultrapassar o limite de WIP","Para itens que precisam apenas de aprovação do PO","Para itens planejados para a próxima Sprint"],ans:1,xp:25,exp:"Expedite é para emergências reais, como incidente em produção ou compliance crítico. Pode violar o limite de WIP, mas deve ser rara para não desorganizar o fluxo.",vid:{t:"Kanban Expedite Policy",u:"https://www.youtube.com/results?search_query=Kanban+Expedite+class+of+service"}},
 {diff:2,cat:"Melhoria Contínua",concept:"Pareto",q:"O que é o Diagrama de Pareto e como se usa em retrospectivas de fluxo?",opts:["Diagrama de pizza de bugs","Gráfico de barras decrescente que identifica quais categorias geram 80% dos problemas — priorizando onde atuar","Gráfico de velocidade acumulada","Radar de skills do time"],ans:1,xp:25,exp:"Princípio de Pareto (80/20): 80% dos problemas vêm de 20% das causas. No fluxo: se 70% dos bloqueios vêm de 'aguardando aprovação', atacar essa causa tem 10x mais impacto.",vid:{t:"Diagrama de Pareto",u:"https://www.youtube.com/results?search_query=Pareto+chart+continuous+improvement"}},
 {diff:2,cat:"Histórias de Usuário",concept:"Critérios de aceitação",q:"O que são critérios de aceitação e por que são essenciais?",opts:["Estimativas de esforço","Condições específicas e testáveis que uma story deve atender para ser aceita pelo PO","Aprovações formais de compliance","Critérios de contratação"],ans:1,xp:25,exp:"Critérios de aceitação transformam ambiguidade em clareza testável. Sem critérios, o time pode implementar algo tecnicamente correto mas não o que o cliente esperava — causando retrabalho.",vid:{t:"User Story Acceptance Criteria",u:"https://www.youtube.com/results?search_query=user+story+acceptance+criteria+agile"}},
 {diff:2,cat:"Histórias de Usuário",concept:"Estrutura de User Story",q:"O que é a estrutura 'Como [persona], Quero [ação], Para [valor]'?",opts:["Template de bug report","Formato que captura: quem se beneficia, o que acontece, e por que — orientando ao valor de negócio","Especificação técnica de sistema","Formato de Sprint Goal"],ans:1,xp:25,exp:"A estrutura de User Story (Mike Cohn) garante o 'porquê'. O 'Para' é o valor real — sem ele, o time pode implementar sem entender o propósito. Ex: 'Para agir antes que a janela de denúncia ao regulador expire.'",vid:{t:"User Stories — como escrever bem",u:"https://www.youtube.com/results?search_query=user+stories+how+to+write+agile"}},
@@ -287,6 +375,23 @@ const BANK = BANK_RAW.map((question, index) => ({
   id: question.id || ('Q' + String(index + 1).padStart(3, '0'))
 }));
 
+// Detects answer choices that make the correct option too easy to identify.
+function questionQualityIssues(question) {
+  const options = Array.isArray(question?.opts) ? question.opts.map((option) => String(option)) : [];
+  if (options.length !== 4 || !Number.isInteger(question?.ans) || !options[question.ans]) return ['Formato inválido'];
+
+  const lengths = options.map((option) => option.length).sort((a, b) => a - b);
+  const correctLength = options[question.ans].length;
+  const averageLength = lengths.reduce((sum, length) => sum + length, 0) / lengths.length;
+  const issues = [];
+
+  if (correctLength > averageLength * 1.8 && correctLength - lengths[0] > 35) issues.push('Resposta correta muito longa');
+  if (/\b(sempre|nunca|apenas|exclusivamente)\b/i.test(options[question.ans])) issues.push('Pista textual na resposta correta');
+  return issues;
+}
+
+const QUESTION_QUALITY_REPORT = BANK.flatMap((question) => questionQualityIssues(question).map((issue) => ({ id: question.id, issue })));
+
 // Creates a clean default profile used for new or reset users.
 function defaultProfile() {
   return {
@@ -309,6 +414,7 @@ function defaultProfile() {
     unidade: '',
     consentVersion: null,
     consentAt: null,
+    analyticsConsent: false,
     daily: { date: null, done: false, score: 0 }
   };
 }
@@ -412,6 +518,7 @@ async function syncToCloud() {
       nome: profile.nome,
       sobrenome: profile.sobrenome,
       unidade: profile.unidade,
+      analytics_consent: profile.analyticsConsent,
       consent_version: profile.consentVersion,
       consent_at: profile.consentAt
     });
@@ -466,7 +573,16 @@ function applyCloudData(cloudData) {
         };
     });
   }
+  setAnalyticsConsent(Boolean(profile.analyticsConsent));
   return Boolean(cloudData.profile || cloudData.masteryRows.length);
+}
+
+// Enables or disables optional usage analytics after explicit user choice.
+function setAnalyticsConsent(granted) {
+  const value = Boolean(granted);
+  localStorage.setItem('analytics-consent', value ? 'granted' : 'denied');
+  firebaseAnalytics.setAnalyticsCollectionEnabled(value);
+  if (value) firebaseAnalytics.logEvent('analytics_consent_granted');
 }
 
 // Loads and applies the authenticated user's cloud profile and mastery data.

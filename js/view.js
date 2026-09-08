@@ -237,6 +237,30 @@ function renderAccountIdentity() {
   identity.textContent = (first + last || fallback).toUpperCase();
 }
 
+// Calculates promotion progress from the user's real answers and required groups.
+function promotionProgress() {
+  if (profile.level >= LEVELS.length || !profile.totalAnswered) return profile.level >= LEVELS.length ? 100 : 0;
+
+  const generalProgress = Math.min(100, (profile.totalCorrect / profile.totalAnswered) * 100);
+  const requiredGroups = REQUIRED_BY_LEVEL[profile.level] || [];
+  const groupProgress = requiredGroups.map((group) => {
+    const questions = BANK.filter((question) => catGroup(question.concept) === group);
+    let seen = 0;
+    let correct = 0;
+    questions.forEach((question) => {
+      const data = mastery(question.concept);
+      seen += data.seen;
+      correct += data.correct;
+    });
+    return seen ? Math.min(100, (correct / seen) * 100) : 0;
+  });
+
+  const domainProgress = groupProgress.length
+    ? Math.min(...groupProgress)
+    : 0;
+  return Math.round(Math.min(generalProgress / PROMOTION_SCORE, domainProgress / REQUIRED_DOMAIN) * 100);
+}
+
 // Renders the complete Journey home screen from the current profile state.
 function renderHome() {
   ensureDay();
@@ -257,7 +281,7 @@ function renderHome() {
   document.getElementById('continueQuestion').textContent = weakConcept
     ? 'Questões adaptativas focadas no seu nível'
     : 'Comece um treinamento para continuar sua jornada';
-  document.getElementById('continueBar').style.width = `${weakConcept ? Math.max(8, weakPercentage) : 8}%`;
+  document.getElementById('continueBar').style.width = `${weakConcept ? weakPercentage : 0}%`;
   document.getElementById('continuePct').textContent = weakConcept ? `${weakPercentage}% domínio` : 'Pronto';
 
   document.getElementById('recommendedConcept').textContent = weakConcept || 'Comece seu treinamento';
@@ -273,12 +297,16 @@ function renderHome() {
   document.getElementById('goalText').textContent = profile.level < LEVELS.length
     ? `Avaliação + domínio mínimo de ${REQUIRED_DOMAIN}%`
     : 'Você concluiu toda a jornada';
-  document.getElementById('goalBar').style.width = profile.level < LEVELS.length ? '75%' : '100%';
+  document.getElementById('goalBar').style.width = `${promotionProgress()}%`;
   document.getElementById('goalHint').textContent = profile.level < LEVELS.length
     ? `Requisito geral: ${PROMOTION_SCORE}%`
     : 'Continue praticando para manter o domínio';
 
   const journey = document.getElementById('journeyTrack');
+  const journeyProgress = profile.level >= LEVELS.length
+    ? 100
+    : ((profile.level - 1) / (LEVELS.length - 1)) * 100;
+  journey.style.setProperty('--track-fill', `${journeyProgress}%`);
 
   // Map level number to mascot file (same order as renderJourneyMascots)
   const trackMascots = [
@@ -316,7 +344,9 @@ function renderStudy() {
     concepts.forEach((concept) => {
       const material = MATERIALS[concept];
       const count = BANK.filter((question) => question.concept === concept).length;
-      const practiceAction = count > 0
+      const answered = mastery(concept).seen;
+      const displayedTotal = answered > 0 ? count : 0;
+      const practiceAction = answered > 0
         ? `<button class="btn" type="button" data-c="${encodeURIComponent(concept)}" data-action="study-concept">🧠 Praticar</button>`
         : '';
       if (!material) return;
@@ -326,7 +356,7 @@ function renderStudy() {
           <h3 class="study-title">${esc(concept)}</h3>
           <div class="meta">
             <span class="chip">${esc(group)}</span>
-            <span class="chip">${count} perguntas</span>
+            <span class="chip">${answered}/${displayedTotal} respondidas</span>
             <span class="chip">${masteryPct(concept)}% domínio</span>
           </div>
           <div class="actions">
@@ -462,4 +492,33 @@ function renderMetrics() {
     : '<div class="empty">Nenhum ponto de atenção no momento. Continue assim.</div>';
 
   applyProgressWidths(document.getElementById('metricsSkills'));
+}
+
+// Renders the FAQ for everyone and the ticket workflow for authenticated users.
+async function renderSupport() {
+  const stateElement = document.getElementById('support-auth-state');
+  const form = document.getElementById('supportForm');
+  if (!stateElement || !form) return;
+
+  if (!currentUser) {
+    stateElement.innerHTML = '<div class="empty support-login-note">Entre na sua conta para abrir um chamado e acompanhar o atendimento.</div>';
+    form.hidden = true;
+    document.getElementById('supportTickets').innerHTML = '';
+    return;
+  }
+
+  stateElement.innerHTML = `<div class="support-user-note">Chamado em nome de <b>${esc(currentUser.email || '')}</b></div>`;
+  form.hidden = false;
+  await renderSupportTickets();
+}
+
+// Shows only tickets owned by the currently authenticated user.
+async function renderSupportTickets() {
+  const container = document.getElementById('supportTickets');
+  if (!container || !currentUser) return;
+  const tickets = await sb.getSupportTickets(currentUser.id);
+  container.innerHTML = tickets.length
+    ? `<div class="section-title">Meus chamados</div><div class="support-ticket-list">${tickets.map((ticket) => `
+      <article class="support-ticket"><div><b>${esc(ticket.subject)}</b><small>${esc(ticket.category)} · ${esc(ticket.status)} · ${esc(ticket.created_at)}</small></div></article>`).join('')}</div>`
+    : '';
 }

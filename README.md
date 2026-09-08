@@ -103,6 +103,7 @@ As telas ficam no mesmo HTML e usam a classe `screen`:
 - `study`: catalogo de materiais e perguntas por conceito.
 - `metrics`: dominio, precisao e pontos de atencao.
 - `profile`: historico, conquistas e reset.
+- `support`: FAC, SAC e chamados privados do usuario.
 - `quiz`: pergunta atual.
 - `result`: resultado da sessao.
 
@@ -211,6 +212,27 @@ Para adicionar uma acao:
 
 Para adicionar uma tela, crie uma `section` com classe `screen` e ID, inclua o ID em `allowedScreens`, adicione a renderizacao em `showScreen()` e crie o botao com `data-screen`.
 
+### FAC e SAC
+
+Edite as perguntas dentro da `section#support` em `index.html`. Cada item usa `details` e `summary`, permitindo abrir respostas sem JavaScript adicional.
+
+O formulario de chamados usa `submitSupportTicket()` em `js/controller.js`. Os chamados sao gravados em `support/{uid}/tickets/{ticketId}` e ficam acessiveis somente ao proprio usuario pelas regras em `firestore.rules`. Para alterar categorias, edite as `option` de `#supportCategory`.
+
+### Email dos chamados com EmailJS
+
+O chamado e salvo primeiro no Firestore e depois encaminhado para `acaeacademiaagile@gmail.com` pelo EmailJS. Para ativar o envio, crie uma conta gratuita no EmailJS, configure um servico de email e um template, e preencha `EMAILJS_CONFIG` em `js/model.js`:
+
+```js
+const EMAILJS_CONFIG = Object.freeze({
+	publicKey: 'SUA_PUBLIC_KEY',
+	serviceId: 'SEU_SERVICE_ID',
+	templateId: 'SEU_TEMPLATE_ID',
+	recipient: 'acaeacademiaagile@gmail.com'
+});
+```
+
+O template deve usar estas variaveis: `{{to_email}}`, `{{from_email}}`, `{{ticket_id}}`, `{{category}}`, `{{subject}}`, `{{description}}` e `{{created_at}}`. A public key do EmailJS pode ficar no frontend; nunca coloque senha SMTP ou chave privada no codigo.
+
 ## Dados e progresso
 
 ### Armazenamento local
@@ -241,7 +263,7 @@ Nao use `state` para dados que precisam sobreviver ao recarregamento. Para isso,
 
 As chamadas de autenticacao e Firestore ficam na fachada `sb` em `js/model.js`. O nome foi mantido para reduzir o impacto da migracao no restante do app.
 
-O frontend usa a configuracao publica do Firebase. Ela nao e um segredo; a protecao real esta nas regras do Firestore e no Firebase Authentication.
+O frontend usa a configuracao publica do Firebase. Ela nao e um segredo; a protecao real esta nas regras do Firestore e no Firebase Authentication. Solicitacoes de privacidade devem ser enviadas para `acaeacademiaagile@gmail.com`.
 
 Operacoes principais: `signUp()`, `signIn()`, `signOut()`, `getUser()`, `getProfile()`, `getMastery()`, `upsertProfile()`, `upsertMastery()` e `insertSession()`.
 
