@@ -87,6 +87,8 @@ test('Support area provides FAQ and authenticated ticket flow', () => {
   assert.match(model, /async getSupportTickets/);
   assert.match(model, /collection\('support'\)/);
   assert.match(view, /async function renderSupport/);
+  assert.match(html, /acaeacademiaagile@gmail\.com/);
+  assert.match(html, /Não encontrou a resposta\?/);
 });
 
 test('Requester can open a ticket and read the team response', () => {

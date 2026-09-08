@@ -424,6 +424,14 @@ button,a{font:inherit}
 .metric-focus span { color: var(--violet); font: 11px var(--mono); }
 .metric-focus-action { margin-left: 8px; padding: 5px 9px; font: 10px var(--sans); }
 .faq-list { display: grid; gap: 8px; }
+.support-callout { display: flex; align-items: center; gap: 12px; margin-bottom: 10px; padding: 13px 15px; border: 1px solid rgba(91,130,255,.38); border-radius: 10px; background: linear-gradient(100deg, rgba(91,130,255,.16), rgba(167,123,255,.08)); }
+.support-callout-icon { width: 34px; height: 34px; flex: 0 0 34px; display: grid; place-items: center; border-radius: 9px; background: var(--accent); font-size: 17px; }
+.support-callout b { display: block; color: var(--text); font-size: 12px; }
+.support-callout p { margin: 4px 0 0; color: var(--muted); font-size: 10px; line-height: 1.45; }
+.support-contact { margin-top: 14px; padding: 12px 15px; border: 1px solid var(--border); border-radius: 9px; background: rgba(255,255,255,.02); }
+.support-contact b { display: block; color: var(--text); font-size: 12px; }
+.support-contact p { margin: 5px 0 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
+.support-contact a { color: var(--accent); font-weight: 700; }
 .faq-item { padding: 13px 15px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; }
 .faq-item summary { cursor: pointer; font-size: 12px; font-weight: 700; }
 .faq-item p { margin: 10px 0 0; color: var(--muted); font-size: 11px; line-height: 1.55; }
