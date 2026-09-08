@@ -459,6 +459,8 @@ button,a{font:inherit}
 .support-detail-block b { display: block; font-size: 11px; }
 .support-detail-block p { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; white-space: pre-wrap; }
 .support-response.has-response { border-color: rgba(35,213,110,.35); background: rgba(35,213,110,.06); }
+.support-close-ticket { width: 100%; margin-top: 14px; background: rgba(255,128,128,.1); border-color: rgba(255,128,128,.35); color: #ff9a9a; }
+.support-closed-note { margin-top: 14px; padding: 11px; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); font-size: 11px; text-align: center; }
 .admin-ticket { margin-bottom: 12px; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
 .admin-ticket-meta { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; color: var(--muted); font-size: 10px; }
 .admin-ticket h3 { margin: 14px 0 6px; font-size: 15px; }

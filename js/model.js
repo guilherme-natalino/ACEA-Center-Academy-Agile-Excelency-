@@ -146,6 +146,13 @@ const sb = {
     return true;
   },
 
+  async closeSupportTicket(ticket) {
+    const user = firebaseAuth.currentUser;
+    if (!user || !ticket?.path || ticket.user_id !== user.uid || ticket.status === 'closed') return false;
+    await firestore.doc(ticket.path).update({ status: 'closed', closed_at: new Date().toISOString() });
+    return true;
+  },
+
   async clearProgress(userId) {
     const user = firebaseAuth.currentUser;
     if (!user || user.uid !== userId) return false;

@@ -47,6 +47,8 @@ test('Support tickets are restricted to the authenticated owner', () => {
   assert.match(rules, /allow update, delete: if false/);
   assert.match(rules, /request\.auth\.token\.email == 'guilhermealisson14@hotmail\.com'/);
   assert.match(rules, /request\.auth\.token\.email_verified == true/);
+  assert.match(rules, /request\.resource\.data\.status == 'closed'/);
+  assert.match(rules, /resource\.data\.status != 'closed'/);
 });
 
 test('Support email uses configured EmailJS public integration', () => {

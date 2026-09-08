@@ -584,7 +584,18 @@ function openSupportTicket(ticketId) {
       <small>${esc(ticket.created_at || '')}</small>
       <div class="support-detail-block"><b>Descrição enviada</b><p>${esc(ticket.description || '')}</p></div>
       <div class="support-detail-block support-response ${response ? 'has-response' : ''}"><b>Resposta da equipe</b><p>${response ? esc(response) : 'Aguardando atendimento da equipe.'}</p></div>
+      ${ticket.status === 'closed' ? '<div class="support-closed-note">Chamado encerrado. Não são permitidas novas respostas ou alterações.</div>' : '<button class="btn support-close-ticket" type="button" data-action="close-support-ticket" data-ticket-id="' + esc(ticket.id) + '">Encerrar chamado</button>'}
       <button class="account-cancel" type="button" data-action="close-modal">Fechar</button>
     </div>`;
   openModal();
+}
+
+async function closeSupportTicket(ticketId) {
+  const ticket = supportTicketsCache.find((item) => item.id === ticketId);
+  if (!ticket || !confirm('Encerrar este chamado? Depois disso ele não poderá mais ser alterado.')) return;
+  const closed = await sb.closeSupportTicket(ticket);
+  if (!closed) { toast('Não foi possível encerrar o chamado.'); return; }
+  closeModal();
+  toast('Chamado encerrado.');
+  renderSupportTickets();
 }

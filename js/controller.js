@@ -789,6 +789,7 @@ document.addEventListener('click', (event) => {
     case 'study-concept': studyConcept(actionButton.dataset.c); break;
     case 'study-group': studyGroup(actionButton.dataset.group); break;
     case 'open-support-ticket': openSupportTicket(actionButton.dataset.ticketId); break;
+    case 'close-support-ticket': closeSupportTicket(actionButton.dataset.ticketId); break;
     case 'admin-respond': respondToSupportTicket(actionButton.dataset.ticketId); break;
     case 'toggle-support-category': toggleSupportCategory(actionButton); break;
     case 'use-cloud-data': resolveDataChoice('cloud'); break;

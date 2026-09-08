@@ -56,12 +56,18 @@ service cloud.firestore {
         && request.resource.data.description.size() <= 2000
         && request.resource.data.created_at is string
         && request.resource.data.created_at.size() <= 40;
-      allow update, delete: if false;
+      allow update: if ownsUser(userId)
+        && resource.data.user_id == userId
+        && resource.data.status != 'closed'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'closed_at'])
+        && request.resource.data.status == 'closed';
+      allow delete: if false;
     }
 
     match /{path=**}/tickets/{ticketId} {
       allow read: if isAdmin();
       allow update: if isAdmin()
+        && resource.data.status != 'closed'
         && request.resource.data.user_id == resource.data.user_id
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['response', 'status', 'answered_at']);
     }

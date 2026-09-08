@@ -96,6 +96,9 @@ test('Requester can open a ticket and read the team response', () => {
   assert.match(controller, /open-support-ticket/);
   assert.match(controller, /event\.key === 'Escape'/);
   assert.match(controller, /event\.target\.id === 'modal'/);
+  assert.match(view, /Encerrar chamado/);
+  assert.match(controller, /close-support-ticket/);
+  assert.match(model, /async closeSupportTicket/);
 });
 
 test('Admin area is restricted and can respond to tickets', () => {
