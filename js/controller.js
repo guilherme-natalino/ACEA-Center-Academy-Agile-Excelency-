@@ -108,6 +108,12 @@ async function pollNotifications() {
         if (previous[ticket.id] && previous[ticket.id] !== marker && ticket.response) appNotifications.push({ title: 'Chamado respondido', message: ticket.subject });
       });
       localStorage.setItem(key, JSON.stringify(current));
+      const lastActive = Object.keys(profile.activityDays || {}).sort().pop();
+      if (lastActive === dayKey()) localStorage.removeItem('streak-risk-notified');
+      else if (lastActive && isYesterday(lastActive, dayKey()) && localStorage.getItem('streak-risk-notified') !== dayKey()) {
+        appNotifications.push({ title: 'Seu streak está em risco', message: 'Pratique hoje para manter sua sequência de dias.' });
+        localStorage.setItem('streak-risk-notified', dayKey());
+      }
     }
     updateNotificationBadge();
   } catch (error) {
@@ -521,7 +527,11 @@ function answer(button) {
   if (options[correctPosition]) options[correctPosition].classList.add('correct');
 
   const isCorrect = position === correctPosition;
-  if (!isCorrect) button.classList.add('wrong');
+  if (!isCorrect) {
+    button.classList.add('wrong');
+    state.lives = Math.max(0, Number(state.lives ?? MAX_SESSION_LIVES) - 1);
+    renderLives({ shake: true });
+  }
 
   const masteryData = mastery(question.concept);
   const previousPercentage = masteryPct(question.concept);
@@ -588,12 +598,49 @@ function answer(button) {
 
   const nextButton = document.getElementById('nextBtn');
   nextButton.style.display = 'block';
-  nextButton.textContent = state.idx < state.questions.length - 1 ? 'Próxima →' : 'Ver resultado →';
+  if (!isCorrect && state.lives <= 0) {
+    nextButton.textContent = 'Revisar conceito →';
+    toast('💔 Sem vidas nesta rodada. Revise o conceito fraco antes de continuar.');
+  } else {
+    nextButton.textContent = state.idx < state.questions.length - 1 ? 'Próxima →' : 'Ver resultado →';
+  }
   save();
+}
+
+function reviewWeakConcept() {
+  const weakConcept = getWeakConcept();
+  if (!weakConcept) {
+    startTraining();
+    return;
+  }
+
+  const pool = BANK.filter((question) => question.concept === weakConcept).sort((a, b) => a.diff - b.diff);
+  state = {
+    mode: 'recommended',
+    questions: uniquePick(pool, Math.min(6, pool.length)),
+    idx: 0,
+    results: [],
+    sessionCorrect: 0,
+    sessionStreak: 0,
+    lives: MAX_SESSION_LIVES,
+    optionOrder: [],
+    correctPosition: 0
+  };
+  markSeen(state.questions);
+  save();
+  openQuiz();
+  toast(`🩹 Revisão focada em ${weakConcept}`);
 }
 
 // Advances to the next question or closes the session when the last question is reached.
 function nextQuestion() {
+  if (!state.questions.length) return;
+  const hasNoLives = Number(state.lives ?? MAX_SESSION_LIVES) <= 0;
+  if (hasNoLives && document.getElementById('nextBtn')?.textContent?.includes('Revisar')) {
+    reviewWeakConcept();
+    return;
+  }
+
   if (state.idx < state.questions.length - 1) {
     state.idx += 1;
     renderQuestion();
@@ -643,7 +690,10 @@ async function finishSession() {
       return { g: group, pc: percentage };
     });
 
-    const passed = score >= PROMOTION_SCORE && competencies.every((item) => item.pc >= REQUIRED_DOMAIN);
+    const lessonsReady = profile.level < 2 || nextStageLessonsReady(profile.level + 1);
+    const passed = score >= PROMOTION_SCORE
+      && competencies.every((item) => item.pc >= REQUIRED_DOMAIN)
+      && lessonsReady;
     if (passed && profile.level < LEVELS.length) {
       profile.level += 1;
       addXP(250);
@@ -780,11 +830,13 @@ document.addEventListener('click', (event) => {
     case 'exam': startExam(); break;
     case 'daily': startDaily(); break;
     case 'recommended': startRecommended(); break;
+    case 'review-concept': reviewWeakConcept(); break;
     case 'next': nextQuestion(); break;
     case 'reset': resetProgress(); break;
     case 'auth-menu': currentUser ? showAuthMenu() : showAuthModal(); break;
     case 'notifications': renderNotifications(); break;
     case 'streak-calendar': renderStreakCalendar(); break;
+    case 'slack-community': window.open('https://slack.com/', '_blank', 'noopener,noreferrer'); break;
     case 'auth-modal': showAuthModal(); break;
     case 'close-modal': closeModal(); break;
     case 'submit-auth': submitAuth(); break;
@@ -795,6 +847,7 @@ document.addEventListener('click', (event) => {
     case 'study-group': studyGroup(actionButton.dataset.group); break;
     case 'open-support-ticket': openSupportTicket(actionButton.dataset.ticketId); break;
     case 'close-support-ticket': closeSupportTicket(actionButton.dataset.ticketId); break;
+    case 'support-user-reply': submitRequesterReply(actionButton.dataset.ticketId); break;
     case 'admin-respond': respondToSupportTicket(actionButton.dataset.ticketId); break;
     case 'toggle-support-category': toggleSupportCategory(actionButton); break;
     case 'use-cloud-data': resolveDataChoice('cloud'); break;
@@ -831,12 +884,34 @@ function selectSupportCategory(value, option) {
 }
 
 // Sends a support ticket after validating the authenticated user's input.
+async function submitRequesterReply(ticketId) {
+  const ticket = supportTicketsCache.find((item) => item.id === ticketId);
+  if (!ticket) return;
+  const field = document.getElementById('requesterReply');
+  const reply = field ? field.value.trim() : '';
+  if (!reply || reply.length < 3) {
+    toast('Escreva uma resposta antes de enviar.');
+    return;
+  }
+
+  const result = await sb.submitRequesterReply(ticket, reply);
+  if (!result.ok) {
+    toast(result.reason || 'Não foi possível enviar sua resposta.');
+    return;
+  }
+
+  closeModal();
+  toast('Resposta enviada para a equipe.');
+  renderSupportTickets();
+}
+
 async function submitSupportTicket(event) {
   event.preventDefault();
   const errorElement = document.getElementById('supportError');
   const submitButton = document.querySelector('#supportForm button[type="submit"]');
   const subject = document.getElementById('supportSubject').value.trim();
   const description = document.getElementById('supportDescription').value.trim();
+  const files = Array.from(document.getElementById('supportEvidence')?.files || []);
   if (!currentUser) return;
   errorElement.className = 'auth-error';
   if (subject.length < 3) {
@@ -870,6 +945,7 @@ async function submitSupportTicket(event) {
       category: document.getElementById('supportCategory').value,
       subject,
       description,
+      evidence: files.map((file) => ({ name: file.name.slice(0, 120), type: file.type, size: file.size })),
       status: 'open',
       created_at: new Date().toISOString()
     });

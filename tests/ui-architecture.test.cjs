@@ -103,6 +103,14 @@ test('Requester can open a ticket and read the team response', () => {
   assert.match(model, /async closeSupportTicket/);
 });
 
+test('Answered tickets allow the requester to reply back', () => {
+  assert.match(view, /Responder ao atendimento|Resposta do solicitante/);
+  assert.match(view, /data-action="support-user-reply"/);
+  assert.match(controller, /support-user-reply/);
+  assert.match(controller, /submitRequesterReply/);
+  assert.match(model, /submitRequesterReply|requester_reply/);
+});
+
 test('Admin area is restricted and can respond to tickets', () => {
   assert.match(html, /id="nav-admin"/);
   assert.match(html, /id="admin"/);
@@ -123,6 +131,15 @@ test('Notifications poll ticket creation and responses by user scope', () => {
   assert.match(controller, /isAdminUser\(\)/);
   assert.match(controller, /Chamado respondido/);
   assert.match(controller, /setInterval\(pollNotifications, 60000\)/);
+  assert.match(controller, /Seu streak está em risco/);
+});
+
+test('Admin supports search, status and category filters', () => {
+  assert.match(html, /id="adminFilters"/);
+  assert.match(view, /adminStatusFilter/);
+  assert.match(view, /adminCategoryFilter/);
+  assert.match(view, /adminSearch/);
+  assert.match(view, /renderAdminTicketList/);
 });
 
 test('Support ticket validation identifies the incomplete field', () => {
@@ -156,6 +173,28 @@ test('Metrics show all attention groups and provide focused practice', () => {
   assert.doesNotMatch(view, /filter\(\(item\) => item\[1\] < 70\)\.slice\(0, 5\)/);
   assert.match(view, /data-action="study-group"/);
   assert.match(controller, /case 'study-group'/);
+});
+
+test('Priority 2 adds lives, review flow and daily missions', () => {
+  assert.match(model, /MAX_SESSION_LIVES|SESSION_LIVES/);
+  assert.match(controller, /state\.lives|livesRemaining|vidas restantes/i);
+  assert.match(controller, /review.*concept|revisar.*conceito|concept.*review/i);
+  assert.match(html, /Missões diárias|missões diárias/i);
+  assert.match(view, /revisar conceitos fracos|revisão inteligente/i);
+});
+
+test('Wrong answers trigger immediate life indicator refresh and shake feedback', () => {
+  assert.match(view, /function renderLives/);
+  assert.match(view, /renderLives\(\{\s*shake\s*:\s*false\s*\}\)|renderLives\(\);/);
+  assert.match(controller, /renderLives\(\{\s*shake\s*:\s*true\s*\}\)/);
+  assert.match(styles, /lifeShake|life-shake/);
+});
+
+test('Mobile Slack CTA and mission card remain visible and structured', () => {
+  assert.match(html, /id="mobileSlackButton"|class="slack-button"/i);
+  assert.match(view, /dailyMissionList/);
+  assert.match(view, /mission-row/);
+  assert.match(styles, /\.mission-item|\.mission-row|\.slack-button/);
 });
 
 test('Achievement catalog includes learning and progression milestones', () => {
@@ -231,6 +270,14 @@ test('Progress bars use profile data instead of fixed initial values', () => {
   assert.match(view, /journey\.style\.setProperty\('--track-fill'/);
   assert.doesNotMatch(view, /continueBar.*Math\.max\(8/);
   assert.doesNotMatch(view, /goalBar.*'75%'/);
+});
+
+test('Journey progresses gradually and gates levels above LV2', () => {
+  assert.match(model, /function journeyProgressPercent/);
+  assert.match(model, /function nextStageLessonsReady/);
+  assert.match(model, /profile\.totalAnswered/);
+  assert.match(view, /journeyProgressPercent\(\)/);
+  assert.match(controller, /nextStageLessonsReady\(/);
 });
 
 test('Mobile journey track reserves space for mascot labels', () => {

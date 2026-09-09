@@ -54,6 +54,8 @@ service cloud.firestore {
         && request.resource.data.description is string
         && request.resource.data.description.size() >= 15
         && request.resource.data.description.size() <= 2000
+        && request.resource.data.evidence is list
+        && request.resource.data.evidence.size() <= 3
         && request.resource.data.created_at is string
         && request.resource.data.created_at.size() <= 40;
       allow update: if ownsUser(userId)
@@ -61,6 +63,11 @@ service cloud.firestore {
         && resource.data.status != 'closed'
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'closed_at'])
         && request.resource.data.status == 'closed';
+      allow update: if ownsUser(userId)
+        && resource.data.user_id == userId
+        && resource.data.status == 'answered'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requester_reply', 'status', 'requester_replied_at'])
+        && request.resource.data.status == 'answered';
       allow delete: if false;
     }
 

@@ -58,6 +58,10 @@
         <span>Admin</span>
       </button>
     </nav>
+    <a id="mobileSlackButton" class="slack-button" href="https://slack.com/" target="_blank" rel="noopener noreferrer" aria-label="Abrir Slack da comunidade">
+      <span class="slack-icon">💬</span>
+      <span class="slack-label">Slack</span>
+    </a>
   </header>
 
   <main class="main">
@@ -114,6 +118,11 @@
           <strong id="recommendedPct">0%</strong>
           <div class="mini-progress"><i id="recommendedBar"></i></div>
           <button class="purple-action" type="button" data-action="recommended">Treinar agora →</button>
+        </div>
+
+        <div class="card mission-card">
+          <div class="card-label">🎯 MISSÕES DIÁRIAS</div>
+          <div id="dailyMissionList" class="mission-list"></div>
         </div>
       </div>
 
@@ -197,6 +206,8 @@
         <input class="auth-input support-input" id="supportSubject" type="text" maxlength="120" placeholder="Descreva o problema em poucas palavras">
         <label class="auth-label" for="supportDescription">Descrição</label>
         <textarea class="auth-input support-textarea" id="supportDescription" maxlength="2000" rows="6" placeholder="Conte o que aconteceu, quando aconteceu e como podemos reproduzir."></textarea>
+        <label class="auth-label" for="supportEvidence">Evidências <span class="muted">(opcional)</span></label>
+        <input class="auth-input support-input" id="supportEvidence" type="file" accept="image/png,image/jpeg,image/webp,application/pdf" multiple>
         <div id="supportError" class="auth-error" role="alert"></div>
         <button class="auth-submit" type="submit"><span>Enviar chamado</span><span aria-hidden="true">→</span></button>
       </form>
@@ -206,6 +217,7 @@
 
     <section class="screen" id="admin">
       <div class="hero"><h1>🛡️ Administração</h1><p>Área restrita para atendimento dos chamados.</p></div>
+      <div id="adminFilters" class="admin-filters" hidden></div>
       <div id="adminContent"></div>
     </section>
 
@@ -215,6 +227,7 @@
         <span class="tag" id="modeTag">🎮 Treinamento</span>
         <span class="tag" id="qdiff">Básico</span>
         <span class="qcount" id="qcount">1/12</span>
+        <span class="tag" id="livesState">Vidas: 3</span>
       </div>
       <div class="qcard"><div class="qtext" id="qtext"></div><div class="opts" id="opts"></div></div>
       <div class="feedback" id="feedback"></div>

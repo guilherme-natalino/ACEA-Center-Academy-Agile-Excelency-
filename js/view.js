@@ -16,6 +16,25 @@ function getDifficultyLabel(difficulty) {
   return ['', 'Básico', 'Intermediário', 'Avançado', 'Expert', 'Especialista'][difficulty] || 'Básico';
 }
 
+// Renders the current life state as heart icons; optional shake when one is lost.
+function renderLives({ shake = false } = {}) {
+  const livesDisplay = document.getElementById('livesState');
+  if (!livesDisplay) return;
+
+  const lives = Math.max(0, Number(state.lives ?? MAX_SESSION_LIVES));
+  const hearts = Array.from({ length: MAX_SESSION_LIVES }, (_, index) => {
+    const active = index < lives;
+    return `<span class="life-heart ${active ? '' : 'is-broken'}" aria-hidden="true">${active ? '❤' : '💔'}</span>`;
+  }).join('');
+
+  livesDisplay.innerHTML = hearts;
+  if (shake) {
+    livesDisplay.classList.remove('life-shake');
+    void livesDisplay.offsetWidth;
+    livesDisplay.classList.add('life-shake');
+  }
+}
+
 // Renders the current quiz question and safely creates its answer buttons.
 function renderQuestion() {
   const question = state.questions[state.idx];
@@ -24,6 +43,7 @@ function renderQuestion() {
   document.getElementById('modeTag').textContent = getModeLabel(state.mode);
   document.getElementById('qdiff').textContent = getDifficultyLabel(question.diff);
   document.getElementById('qcount').textContent = `${state.idx + 1}/${state.questions.length}`;
+  renderLives();
   document.getElementById('qtext').textContent = question.q;
 
   const examBanner = document.getElementById('examBanner');
@@ -103,6 +123,14 @@ function showResult(score, competencies, passed) {
       </div>`).join('');
     html += '</div>';
   }
+
+  html += `
+    <div class="card mission-brief">
+      <div class="card-label">🧠 REVISÃO INTELIGENTE</div>
+      <h3>Revisar antes de continuar</h3>
+      <p class="muted small">O sistema prioriza o conceito mais fraco para você revisar sem perder o ritmo de estudo.</p>
+      <button class="btn secondary" type="button" data-action="review-concept">Revisar conceito fraco</button>
+    </div>`;
 
   const errors = state.results.filter((result) => !result.ok);
   if (errors.length) {
@@ -287,6 +315,22 @@ function renderHome() {
   document.getElementById('recommendedPct').textContent = `${weakPercentage}%`;
   document.getElementById('recommendedBar').style.width = `${weakPercentage}%`;
 
+  const missionList = document.getElementById('dailyMissionList');
+  if (missionList) {
+    const missions = getDailyMissions();
+    missionList.innerHTML = missions.map((mission) => {
+      const percent = Math.min(100, Math.round((mission.current / mission.goal) * 100));
+      return `
+        <div class="mission-item">
+          <div class="mission-row">
+            <span>${esc(mission.label)}</span>
+            <strong>${mission.reward}<em> ·· ${mission.current}/${mission.goal}</em></strong>
+          </div>
+          <div class="mini-progress"><i style="width:${percent}%"></i></div>
+        </div>`;
+    }).join('');
+  }
+
   const dailyDone = profile.daily.date === dayKey() && profile.daily.done;
   document.getElementById('dailyCount').textContent = dailyDone ? '5 de 5 questões' : '0 de 5 questões';
   document.getElementById('dailyBar').style.width = dailyDone ? '100%' : '0%';
@@ -294,18 +338,19 @@ function renderHome() {
   const nextLevel = profile.level < LEVELS.length ? LEVELS[profile.level].label : 'Nível máximo alcançado';
   document.getElementById('nextGoal').textContent = nextLevel;
   document.getElementById('goalText').textContent = profile.level < LEVELS.length
-    ? `Avaliação + domínio mínimo de ${REQUIRED_DOMAIN}%`
+    ? profile.level >= 2 && !nextStageLessonsReady(profile.level + 1)
+      ? 'Conclua as lições da próxima etapa antes da avaliação'
+      : `Avaliação + domínio mínimo de ${REQUIRED_DOMAIN}%`
     : 'Você concluiu toda a jornada';
   document.getElementById('goalBar').style.width = `${promotionProgress()}%`;
   document.getElementById('goalHint').textContent = profile.level < LEVELS.length
-    ? `Requisito geral: ${PROMOTION_SCORE}%`
+    ? profile.level >= 2 && !nextStageLessonsReady(profile.level + 1)
+      ? 'Lições da próxima etapa: em andamento'
+      : `Requisito geral: ${PROMOTION_SCORE}%`
     : 'Continue praticando para manter o domínio';
 
   const journey = document.getElementById('journeyTrack');
-  const journeyProgress = profile.level >= LEVELS.length
-    ? 100
-    : ((profile.level - 1) / (LEVELS.length - 1)) * 100;
-  journey.style.setProperty('--track-fill', `${journeyProgress}%`);
+  journey.style.setProperty('--track-fill', `${journeyProgressPercent()}%`);
 
   // Map level number to mascot file (same order as renderJourneyMascots)
   const trackMascots = [
@@ -565,29 +610,52 @@ function renderAdminAccess() {
 // Renders all tickets for the restricted administrator and allows responses.
 async function renderAdmin() {
   const container = document.getElementById('adminContent');
+  const filters = document.getElementById('adminFilters');
   if (!container) return;
   if (!isAdminUser()) {
     container.innerHTML = '<div class="empty">Acesso não autorizado.</div>';
+    if (filters) filters.hidden = true;
     return;
+  }
+  if (filters) {
+    filters.hidden = false;
+    filters.innerHTML = `<label class="admin-filter-search-wrap" for="adminSearch"><span aria-hidden="true">⌕</span><input class="admin-filter-search" id="adminSearch" type="search" placeholder="Pesquisar chamados" aria-label="Buscar chamados"></label><label class="admin-filter-field"><span>Status</span><select id="adminStatusFilter" class="admin-filter-select"><option value="all">Todos os status</option><option value="open">Abertos</option><option value="answered">Respondidos</option><option value="closed">Fechados</option></select></label><label class="admin-filter-field"><span>Categoria</span><select id="adminCategoryFilter" class="admin-filter-select"><option value="all">Todas as categorias</option><option value="bug">Bugs</option><option value="account">Conta</option><option value="progress">Progresso</option><option value="suggestion">Sugestões</option><option value="other">Outros</option></select></label>`;
   }
   container.innerHTML = '<div class="empty">Carregando chamados...</div>';
   try {
     const tickets = await sb.getAdminTickets();
     window.adminTicketsCache = tickets;
-    container.innerHTML = tickets.length
-      ? tickets.map((ticket) => `
+    renderAdminTicketList(tickets);
+    filters?.querySelectorAll('input, select').forEach((field) => field.addEventListener('input', () => renderAdminTicketList(tickets)));
+    filters?.querySelectorAll('select').forEach((field) => field.addEventListener('change', () => renderAdminTicketList(tickets)));
+  } catch (error) {
+    Security.log('Admin tickets load failed', { message: error.message });
+    container.innerHTML = '<div class="auth-error show">Não foi possível carregar os chamados. Verifique se as regras Firestore atualizadas foram publicadas e se seu email está verificado.</div>';
+  }
+}
+
+function renderAdminTicketList(tickets) {
+  const container = document.getElementById('adminContent');
+  const search = String(document.getElementById('adminSearch')?.value || '').toLowerCase();
+  const status = document.getElementById('adminStatusFilter')?.value || 'all';
+  const category = document.getElementById('adminCategoryFilter')?.value || 'all';
+  const filtered = tickets.filter((ticket) => {
+    const matchesSearch = !search || `${ticket.subject || ''} ${ticket.email || ''} ${ticket.description || ''}`.toLowerCase().includes(search);
+    return matchesSearch && (status === 'all' || ticket.status === status) && (category === 'all' || ticket.category === category);
+  });
+  const openCount = tickets.filter((ticket) => ticket.status === 'open').length;
+  const filterSummary = `<div class="admin-summary">${tickets.length} chamados · <b>${openCount} em aberto</b></div>`;
+  container.innerHTML = filterSummary + (filtered.length
+      ? filtered.map((ticket) => `
         <article class="admin-ticket">
           <div class="admin-ticket-meta"><span class="tag">${esc(ticket.status || 'open')}</span><span>${esc(ticket.category || '')}</span><span>${esc(ticket.email || '')}</span><small>${esc(ticket.created_at || '')}</small></div>
           <h3>${esc(ticket.subject || '')}</h3>
           <p>${esc(ticket.description || '')}</p>
           ${ticket.response ? `<div class="support-detail-block support-response has-response"><b>Resposta enviada</b><p>${esc(ticket.response)}</p></div>` : ''}
+          ${ticket.requester_reply ? `<div class="support-detail-block support-response has-response"><b>Resposta do solicitante</b><p>${esc(ticket.requester_reply)}</p></div>` : ''}
           ${ticket.status === 'closed' ? '<div class="support-closed-note">Chamado encerrado. Somente consulta.</div>' : `<textarea class="admin-response" rows="4" data-ticket-response="${esc(ticket.id)}" placeholder="Escreva a resposta para o solicitante...">${esc(ticket.response || '')}</textarea><button class="btn" type="button" data-action="admin-respond" data-ticket-id="${esc(ticket.id)}">Salvar resposta</button>`}
         </article>`).join('')
-      : '<div class="empty">Nenhum chamado encontrado.</div>';
-  } catch (error) {
-    Security.log('Admin tickets load failed', { message: error.message });
-    container.innerHTML = '<div class="auth-error show">Não foi possível carregar os chamados. Verifique se as regras Firestore atualizadas foram publicadas e se seu email está verificado.</div>';
-  }
+      : '<div class="empty">Nenhum chamado corresponde aos filtros.</div>');
 }
 
 async function respondToSupportTicket(ticketId) {
@@ -606,6 +674,7 @@ function openSupportTicket(ticketId) {
   const ticket = supportTicketsCache.find((item) => item.id === ticketId);
   if (!ticket) return;
   const response = String(ticket.response || '').trim();
+  const requesterReply = String(ticket.requester_reply || '').trim();
   document.getElementById('modalBody').innerHTML = `
     <div class="support-ticket-detail">
       <div class="support-ticket-detail-head"><span class="tag">${esc(ticket.status || 'open')}</span><span>${esc(ticket.category || '')}</span></div>
@@ -613,7 +682,17 @@ function openSupportTicket(ticketId) {
       <small>${esc(ticket.created_at || '')}</small>
       <div class="support-detail-block"><b>Descrição enviada</b><p>${esc(ticket.description || '')}</p></div>
       <div class="support-detail-block support-response ${response ? 'has-response' : ''}"><b>Resposta da equipe</b><p>${response ? esc(response) : 'Aguardando atendimento da equipe.'}</p></div>
-      ${ticket.status === 'closed' ? '<div class="support-closed-note">Chamado encerrado. Não são permitidas novas respostas ou alterações.</div>' : '<button class="btn support-close-ticket" type="button" data-action="close-support-ticket" data-ticket-id="' + esc(ticket.id) + '">Encerrar chamado</button>'}
+      ${requesterReply ? `<div class="support-detail-block support-response has-response"><b>Resposta do solicitante</b><p>${esc(requesterReply)}</p></div>` : ''}
+      ${ticket.status === 'closed'
+        ? '<div class="support-closed-note">Chamado encerrado. Não são permitidas novas respostas ou alterações.</div>'
+        : response ? `
+          <div class="support-reply-box">
+            <label class="auth-label" for="requesterReply">Responder ao atendimento</label>
+            <textarea class="auth-input support-textarea" id="requesterReply" rows="4" maxlength="2000" placeholder="Escreva sua resposta para a equipe...">${esc(ticket.requester_reply || '')}</textarea>
+            <button class="btn" type="button" data-action="support-user-reply" data-ticket-id="${esc(ticket.id)}">Responder chamado</button>
+          </div>
+        ` : ''}
+      ${ticket.status === 'closed' ? '' : '<button class="btn support-close-ticket" type="button" data-action="close-support-ticket" data-ticket-id="' + esc(ticket.id) + '">Encerrar chamado</button>'}
       <button class="account-cancel" type="button" data-action="close-modal">Fechar</button>
     </div>`;
   openModal();

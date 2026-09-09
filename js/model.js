@@ -147,6 +147,28 @@ const sb = {
     return true;
   },
 
+  async submitRequesterReply(ticket, reply) {
+    const user = firebaseAuth.currentUser;
+    if (!user || !ticket?.path || ticket.user_id !== user.uid || ticket.status === 'closed') {
+      return { ok: false, reason: 'Chamado inválido ou já encerrado.' };
+    }
+    const trimmed = String(reply || '').trim();
+    if (trimmed.length < 3) {
+      return { ok: false, reason: 'Sua resposta deve ter pelo menos 3 caracteres.' };
+    }
+    try {
+      await firestore.doc(ticket.path).update({
+        requester_reply: trimmed,
+        status: 'answered',
+        requester_replied_at: new Date().toISOString()
+      });
+      return { ok: true };
+    } catch (error) {
+      Security.log('Support requester reply failed', { message: error.message });
+      return { ok: false, reason: error.message || 'Não foi possível enviar sua resposta.' };
+    }
+  },
+
   async closeSupportTicket(ticket) {
     const user = firebaseAuth.currentUser;
     if (!user || !ticket?.path || ticket.user_id !== user.uid || ticket.status === 'closed') return { ok: false, reason: 'Chamado inválido ou já encerrado.' };
@@ -318,6 +340,7 @@ const RECOVERY_VIDEOS=Object.freeze({
 const TOPICS=[['Scrum',['Sprint','Sprint Goal','Product Goal','Definition of Done','Velocity']],['Flow & Métricas',['Lead Time','Cycle Time','Throughput','WIP','WIP limits','Aging WIP','Flow Efficiency','Lei de Little','CFD','Monte Carlo','Percentis','SLE']],['Medição e Análise',['Média, mediana e outliers','Variabilidade','Coeficiente de variação','Distribuição de Lead Time','Scatter plot e correlação','Distribuições e histogramas','Interpretação de percentis','Média versus P85']],['Kanban e Priorização',['Políticas explícitas de priorização','Classes de serviço','Expedite e classes de serviço','Política Expedite','Priorização por valor e risco','Custo de atraso','Replenishment','WIP limits']],['Melhoria Contínua',['PDCA','5 Porquês','Ishikawa','Pareto','Retrospectiva e foco','Experimentos de melhoria','Experimentos e causalidade','Otimização sistêmica']],['Histórias de Usuário',['Estrutura de User Story','INVEST','Qualidade de User Story','Critérios de aceitação','Fatiamento vertical','BDD e Given When Then','Story Mapping','3Cs e colaboração','Histórias orientadas a valor']],['EBM',['EBM - Current Value','EBM - Unrealized Value','EBM - Time to Market','EBM - Ability to Innovate']],['DORA',['DORA - Deployment Frequency','DORA - Change Failure Rate','DORA e outcomes']],['Agile Coaching',['Métricas sem comparação de times','Coaching orientado a outcomes','Agile Coaching']]];
 const LEVELS=[{n:1,label:'🌱 Scrum Master Júnior',color:'#6366f1',diffMax:2},{n:2,label:'⚙️ Scrum Master Pleno',color:'#3b82f6',diffMax:3},{n:3,label:'🔥 Scrum Master Sênior',color:'#06b6d4',diffMax:4},{n:4,label:'🧭 Agile Coach',color:'#10b981',diffMax:5},{n:5,label:'🏆 Especialista em Agile Coaching',color:'#f59e0b',diffMax:5}];
 const REQUIRED_BY_LEVEL={1:['Scrum','Flow & Métricas'],2:['Kanban e Priorização','DORA','EBM'],3:['Medição e Análise','Melhoria Contínua'],4:['Histórias de Usuário','Agile Coaching']};
+const MAX_SESSION_LIVES = 5;
 const PROMOTION_SCORE=75,REQUIRED_DOMAIN=60,SESSION_SIZE=12,EXAM_SIZE=12;
 const ACH=[
   ['first','🎮','Primeiro passo','Responda sua primeira pergunta.'],
@@ -480,7 +503,7 @@ function defaultProfile() {
 }
 
 let profile = defaultProfile();
-let state = { mode: 'training', questions: [], idx: 0, results: [], sessionCorrect: 0, sessionStreak: 0 };
+let state = { mode: 'training', questions: [], idx: 0, results: [], sessionCorrect: 0, sessionStreak: 0, lives: MAX_SESSION_LIVES };
 let syncTimer = null;
 
 // Returns today's local date in the YYYY-MM-DD format used by progression rules.
@@ -727,10 +750,33 @@ function buildExam() {
   return [...picks, ...remaining].slice(0, EXAM_SIZE).sort(() => Math.random() - 0.5).map((question) => ({ ...question, context: 'exam' }));
 }
 
+// Checks whether every lesson concept in a target stage has been started.
+function nextStageLessonsReady(targetLevel) {
+  const requiredGroups = REQUIRED_BY_LEVEL[targetLevel] || [];
+  if (!requiredGroups.length) return true;
+
+  return requiredGroups.every((group) => {
+    const concepts = BANK
+      .filter((question) => catGroup(question.concept) === group)
+      .map((question) => question.concept);
+    return [...new Set(concepts)].every((concept) => mastery(concept).seen > 0);
+  });
+}
+
+// Advances slowly inside the current level; promotion is the only way to cross a level marker.
+function journeyProgressPercent() {
+  if (profile.level >= LEVELS.length) return 100;
+
+  const segment = 100 / (LEVELS.length - 1);
+  const answeredTarget = Math.max(25, profile.level * 25);
+  const gradualProgress = Math.min(0.95, profile.totalAnswered / answeredTarget);
+  return Math.round(((profile.level - 1) * segment) + (gradualProgress * segment));
+}
+
 // Starts the standard adaptive training flow.
 function startTraining() {
   ensureDay();
-  state = { mode: 'training', questions: buildTraining(), idx: 0, results: [], sessionCorrect: 0, sessionStreak: 0 };
+  state = { mode: 'training', questions: buildTraining(), idx: 0, results: [], sessionCorrect: 0, sessionStreak: 0, lives: MAX_SESSION_LIVES };
   markSeen(state.questions);
   save();
   openQuiz();
@@ -744,7 +790,7 @@ function startExam() {
   }
 
   ensureDay();
-  state = { mode: 'exam', questions: buildExam(), idx: 0, results: [], sessionCorrect: 0, sessionStreak: 0 };
+  state = { mode: 'exam', questions: buildExam(), idx: 0, results: [], sessionCorrect: 0, sessionStreak: 0, lives: MAX_SESSION_LIVES };
   markSeen(state.questions);
   save();
   openQuiz();
@@ -770,7 +816,7 @@ function startDaily() {
     index += 17;
   }
 
-  state = { mode: 'daily', questions, idx: 0, results: [], sessionCorrect: 0, sessionStreak: 0 };
+  state = { mode: 'daily', questions, idx: 0, results: [], sessionCorrect: 0, sessionStreak: 0, lives: MAX_SESSION_LIVES };
   markSeen(state.questions);
   save();
   openQuiz();
@@ -785,7 +831,7 @@ function startRecommended() {
   }
 
   const pool = BANK.filter((question) => question.concept === weakConcept).sort((a, b) => a.diff - b.diff);
-  state = { mode: 'recommended', questions: uniquePick(pool, Math.min(8, pool.length)), idx: 0, results: [], sessionCorrect: 0, sessionStreak: 0 };
+  state = { mode: 'recommended', questions: uniquePick(pool, Math.min(8, pool.length)), idx: 0, results: [], sessionCorrect: 0, sessionStreak: 0, lives: MAX_SESSION_LIVES };
   markSeen(state.questions);
   save();
   openQuiz();
@@ -806,6 +852,15 @@ function getWeakConcept() {
   }
 
   return weakest;
+}
+
+function getDailyMissions() {
+  const missionBase = Math.min(5, Math.max(0, profile.totalAnswered % 5 + (state.questions.length ? state.sessionCorrect : 0)));
+  return [
+    { id: 'questions', label: 'Responder 5 questões', current: Math.min(5, missionBase), goal: 5, reward: '25 XP' },
+    { id: 'review', label: 'Revisar um conceito fraco', current: getWeakConcept() ? 1 : 0, goal: 1, reward: '15 XP' },
+    { id: 'streak', label: 'Manter o streak', current: Math.min(1, profile.streak > 0 ? 1 : 0), goal: 1, reward: '10 XP' }
+  ];
 }
 
 // Calculates XP for an answered question according to difficulty and mode.
