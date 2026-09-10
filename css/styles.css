@@ -130,8 +130,8 @@ button,a{font:inherit}
 .toast.show{opacity:1;transform:none}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.6);display:none;align-items:flex-end;z-index:100}
 .modal.show{display:flex}
-.modal-card{width:100%;max-width:860px;margin:0 auto;background:var(--surface);border:1px solid var(--border2);border-radius:20px 20px 0 0;padding:16px;max-height:88vh;overflow:auto}
-.x{float:right;border:0;background:transparent;color:var(--muted);font-size:22px;cursor:pointer}
+.modal-card{position:relative;width:100%;max-width:860px;margin:0 auto;background:var(--surface);border:1px solid var(--border2);border-radius:20px 20px 0 0;padding:16px;max-height:88vh;overflow:auto}
+.x{position:absolute;top:12px;right:16px;z-index:2;width:30px;height:30px;border:0;border-radius:50%;background:rgba(255,255,255,.07);color:var(--muted);font-size:22px;line-height:1;cursor:pointer}
 @media(max-width:640px){
   .grid,.study-grid{grid-template-columns:1fr}
   .stats{grid-template-columns:1fr 1fr}
@@ -485,6 +485,14 @@ button,a{font:inherit}
 .support-detail-block b { display: block; font-size: 11px; }
 .support-detail-block p { margin: 8px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; white-space: pre-wrap; }
 .support-response.has-response { border-color: rgba(35,213,110,.35); background: rgba(35,213,110,.06); }
+.support-conversation { display: grid; gap: 8px; margin-top: 18px; }
+.support-conversation > b { font-size: 11px; }
+.support-message { padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: rgba(255,255,255,.03); }
+.support-message--admin { border-color: rgba(35,213,110,.28); background: rgba(35,213,110,.06); }
+.support-message-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 10px; }
+.support-message--admin .support-message-head strong { color: var(--green); }
+.support-message-head small { color: var(--muted); font-size: 9px; }
+.support-message p { margin: 6px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; white-space: pre-wrap; }
 .support-close-ticket { width: 100%; margin-top: 14px; background: rgba(255,128,128,.1); border-color: rgba(255,128,128,.35); color: #ff9a9a; }
 .support-closed-note { margin-top: 14px; padding: 11px; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); font-size: 11px; text-align: center; }
 .admin-ticket { margin-bottom: 12px; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
@@ -651,6 +659,10 @@ button,a{font:inherit}
   box-shadow: 0 0 0 3px rgba(91,130,255,.18);
 }
 .auth-input::placeholder { color: rgba(255,255,255,.25); }
+.auth-input-wrap { position: relative; }
+.auth-password-input { padding-right: 42px; }
+.password-toggle { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 25px; height: 25px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 15px; }
+.password-toggle:hover, .password-toggle:focus { color: var(--text); }
 
 .auth-select { cursor: pointer; padding-right: 36px; }
 .auth-select option { background: #1a2235; color: #fff; }
@@ -689,7 +701,7 @@ button,a{font:inherit}
 .account-identity { min-width: 0; flex: 1; }
 .account-identity h2 { margin: 0; font-size: 15px; color: #fff; }
 .account-identity p { margin: 3px 0 0; overflow: hidden; color: #aab9df; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.account-status { display: inline-flex; align-items: center; gap: 5px; padding: 4px 8px; border: 1px solid rgba(35,213,110,.55); border-radius: 999px; color: var(--green); font: 700 9px var(--mono); white-space: nowrap; }
+.account-status { display: inline-flex; align-items: center; gap: 5px; margin-right: 40px; padding: 4px 8px; border: 1px solid rgba(35,213,110,.55); border-radius: 999px; color: var(--green); font: 700 9px var(--mono); white-space: nowrap; }
 .account-status i { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
 .account-section-label { padding: 20px 0 10px; color: var(--accent); font-size: 10px; font-weight: 700; letter-spacing: .1em; }
 .analytics-panel { padding: 14px; border: 1px solid rgba(91,130,255,.22); border-radius: 10px; background: rgba(91,130,255,.06); }

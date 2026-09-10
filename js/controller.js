@@ -4,6 +4,7 @@
 let pendingDataChoice = null;
 let notificationTimer = null;
 let appNotifications = [];
+let activeScreenId = null;
 
 // Repairs the known owner profile identity without affecting other accounts.
 function normalizeOwnerIdentity() {
@@ -14,6 +15,15 @@ function normalizeOwnerIdentity() {
     profile.sobrenome = 'Natalino';
   }
   return changed;
+}
+
+// Restores the display name saved by Firebase when an older cloud profile lacks it.
+function restoreAuthenticatedName() {
+  if (!currentUser?.displayName || profile.nome) return false;
+  const parts = currentUser.displayName.trim().split(/\s+/);
+  profile.nome = parts.shift() || '';
+  profile.sobrenome = parts.join(' ');
+  return Boolean(profile.nome);
 }
 
 // Opens the account menu for an authenticated user.
@@ -96,7 +106,18 @@ async function pollNotifications() {
       const previous = JSON.parse(localStorage.getItem(key) || '[]');
       const current = tickets.map((ticket) => ticket.id);
       if (previous.length) tickets.filter((ticket) => !previous.includes(ticket.id)).forEach((ticket) => appNotifications.push({ title: 'Novo chamado', message: `${ticket.subject} · ${ticket.email}` }));
+      const detailKey = 'admin-notification-ticket-details';
+      const previousDetails = JSON.parse(localStorage.getItem(detailKey) || '{}');
+      const currentDetails = {};
+      tickets.forEach((ticket) => {
+        const marker = `${ticket.status || ''}:${ticket.requester_reply || ''}:${ticket.response || ''}`;
+        currentDetails[ticket.id] = marker;
+        if (previousDetails[ticket.id] && previousDetails[ticket.id] !== marker && ticket.requester_reply) {
+          appNotifications.push({ title: 'Nova resposta do solicitante', message: `${ticket.subject} · ${ticket.email}` });
+        }
+      });
       localStorage.setItem(key, JSON.stringify(current));
+      localStorage.setItem(detailKey, JSON.stringify(currentDetails));
     } else {
       const tickets = await sb.getSupportTickets(currentUser.id);
       const key = `support-notification-responses-${currentUser.id}`;
@@ -150,7 +171,7 @@ function showAuthModal() {
           <label class="auth-label" for="aPass">Senha</label>
           <div class="auth-input-wrap">
             <svg class="auth-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="9" width="14" height="10" rx="2"/><path d="M7 9V6a3 3 0 016 0v3"/></svg>
-            <input class="auth-input" id="aPass" type="password" placeholder="Mínimo de 8 caracteres" autocomplete="current-password" minlength="8" maxlength="128">
+            <input class="auth-input auth-password-input" id="aPass" type="password" placeholder="Mínimo de 8 caracteres" autocomplete="current-password" minlength="8" maxlength="128"><button class="password-toggle" type="button" data-password-target="aPass" aria-label="Mostrar senha">👁</button>
           </div>
         </div>
         <button class="auth-link" type="button" data-action="forgot-password">Esqueci minha senha</button>
@@ -230,14 +251,14 @@ function showAuthModal() {
             <label class="auth-label" for="rPass">Senha</label>
             <div class="auth-input-wrap">
               <svg class="auth-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="9" width="14" height="10" rx="2"/><path d="M7 9V6a3 3 0 016 0v3"/></svg>
-              <input class="auth-input" id="rPass" type="password" placeholder="Mínimo de 8 caracteres" autocomplete="new-password" minlength="8" maxlength="128">
+              <input class="auth-input auth-password-input" id="rPass" type="password" placeholder="Mínimo de 8 caracteres" autocomplete="new-password" minlength="8" maxlength="128"><button class="password-toggle" type="button" data-password-target="rPass" aria-label="Mostrar senha">👁</button>
             </div>
           </div>
           <div class="auth-field">
             <label class="auth-label" for="rPass2">Confirmar senha</label>
             <div class="auth-input-wrap">
               <svg class="auth-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="9" width="14" height="10" rx="2"/><path d="M7 9V6a3 3 0 016 0v3"/></svg>
-              <input class="auth-input" id="rPass2" type="password" placeholder="Repita a senha" autocomplete="new-password" minlength="8" maxlength="128">
+              <input class="auth-input auth-password-input" id="rPass2" type="password" placeholder="Repita a senha" autocomplete="new-password" minlength="8" maxlength="128"><button class="password-toggle" type="button" data-password-target="rPass2" aria-label="Mostrar senha">👁</button>
             </div>
           </div>
         </div>
@@ -367,6 +388,16 @@ function setAuthMode(mode) {
   document.getElementById('formRegister').className = isLogin ? 'auth-form auth-form--hidden' : 'auth-form';
 }
 
+// Toggles password visibility without changing the submitted value.
+function togglePassword(targetId, button) {
+  const input = document.getElementById(targetId);
+  if (!input) return;
+  const visible = input.type === 'text';
+  input.type = visible ? 'password' : 'text';
+  button.textContent = visible ? '👁' : '🙈';
+  button.setAttribute('aria-label', visible ? 'Mostrar senha' : 'Ocultar senha');
+}
+
 // Sends login or registration data to Firebase after local validation.
 async function submitAuth() {
   const emailInput = document.getElementById('aEmail');
@@ -402,6 +433,11 @@ async function submitAuth() {
       currentUser = Security.parseStoredUser(JSON.stringify(response.user));
       if (!currentUser) throw new Error('Sessão inválida retornada pelo provedor.');
 
+      if (firebaseAuth.currentUser?.reload) await firebaseAuth.currentUser.reload();
+      currentUser = Security.parseStoredUser(JSON.stringify(firebaseUser(firebaseAuth.currentUser)));
+
+      restoreAuthenticatedName();
+
       localStorage.setItem('firebase_user', JSON.stringify(currentUser));
       const sessionProfile = Security.normalizeProfile(profile);
       const cloudData = await fetchCloudData();
@@ -411,6 +447,7 @@ async function submitAuth() {
         return;
       }
       if (cloudHasProgress) applyCloudData(cloudData);
+      restoreAuthenticatedName();
       else await syncToCloud();
     } else {
       response = await sb.signUp(email, password);
@@ -448,10 +485,27 @@ async function submitAuth() {
 // Converts provider error messages into safe, user-friendly messages.
 function friendlyAuthError(message) {
   const text = String(message || '');
+  if (/user-not-found|invalid-credential|invalid-login-credentials/i.test(text)) return 'E-mail não encontrado ou inexistente.';
   if (/invalid|credentials/i.test(text)) return 'Email ou senha incorretos.';
   if (/email not confirmed/i.test(text)) return 'Confirme seu email antes de entrar.';
   if (/already/i.test(text)) return 'Este email já possui uma conta.';
   return 'Não foi possível autenticar. Verifique os dados e tente novamente.';
+}
+
+// Clears draft support data whenever the user leaves and returns to Help.
+function resetSupportForm() {
+  const form = document.getElementById('supportForm');
+  if (!form) return;
+  form.reset();
+  const label = document.getElementById('supportCategoryLabel');
+  const icon = document.querySelector('.support-category-icon');
+  const menu = document.getElementById('supportCategoryMenu');
+  if (label) label.textContent = 'Reportar bug';
+  if (icon) icon.textContent = '🐞';
+  if (menu) menu.hidden = true;
+  document.querySelector('.support-combobox-trigger')?.setAttribute('aria-expanded', 'false');
+  const error = document.getElementById('supportError');
+  if (error) { error.className = 'auth-error'; error.textContent = ''; }
 }
 
 // Ends the cloud session and restores the last local profile safely.
@@ -487,6 +541,9 @@ function loadLocalProfile() {
 function showScreen(id) {
   const allowedScreens = new Set(['home', 'study', 'metrics', 'profile', 'support', 'admin', 'quiz', 'result']);
   const screenId = allowedScreens.has(id) ? id : 'home';
+
+  if (activeScreenId && activeScreenId !== screenId && (activeScreenId === 'support' || screenId === 'support')) resetSupportForm();
+  activeScreenId = screenId;
 
   document.querySelectorAll('.screen').forEach((screen) => {
     screen.classList.toggle('active', screen.id === screenId);
@@ -911,7 +968,6 @@ async function submitSupportTicket(event) {
   const submitButton = document.querySelector('#supportForm button[type="submit"]');
   const subject = document.getElementById('supportSubject').value.trim();
   const description = document.getElementById('supportDescription').value.trim();
-  const files = Array.from(document.getElementById('supportEvidence')?.files || []);
   if (!currentUser) return;
   errorElement.className = 'auth-error';
   if (subject.length < 3) {
@@ -924,17 +980,6 @@ async function submitSupportTicket(event) {
     errorElement.classList.add('show');
     return;
   }
-  if (files.length > 3) {
-    errorElement.textContent = 'Anexe no máximo 3 arquivos.';
-    errorElement.classList.add('show');
-    return;
-  }
-  if (files.some((file) => !['image/png', 'image/jpeg', 'image/webp', 'application/pdf'].includes(file.type) || file.size > 5 * 1024 * 1024)) {
-    errorElement.textContent = 'Use imagens ou PDF de até 5 MB cada.';
-    errorElement.classList.add('show');
-    return;
-  }
-
   if (submitButton) {
     submitButton.disabled = true;
     submitButton.querySelector('span').textContent = 'Enviando...';
@@ -945,7 +990,6 @@ async function submitSupportTicket(event) {
       category: document.getElementById('supportCategory').value,
       subject,
       description,
-      evidence: files.map((file) => ({ name: file.name.slice(0, 120), type: file.type, size: file.size })),
       status: 'open',
       created_at: new Date().toISOString()
     });
@@ -974,6 +1018,11 @@ document.getElementById('supportForm')?.addEventListener('submit', submitSupport
 
 // Handles login/register mode changes in the authentication dialog.
 document.addEventListener('click', (event) => {
+  const passwordButton = event.target.closest('[data-password-target]');
+  if (passwordButton) {
+    togglePassword(passwordButton.dataset.passwordTarget, passwordButton);
+    return;
+  }
   const modeButton = event.target.closest('[data-auth-mode]');
   if (modeButton) setAuthMode(modeButton.dataset.authMode);
 });
@@ -1022,6 +1071,7 @@ async function submitRegister() {
       profile.consentAt = new Date().toISOString();
       profile.analyticsConsent = analytics;
       setAnalyticsConsent(analytics);
+      if (firebaseAuth.currentUser?.updateProfile) await firebaseAuth.currentUser.updateProfile({ displayName: `${nome} ${sobrenome}`.trim() });
       localStorage.setItem('firebase_user', JSON.stringify(currentUser));
       await syncToCloud();
     }
@@ -1090,6 +1140,7 @@ async function boot() {
     if (currentUser) {
       const loaded = await loadFromCloud();
       if (loaded) {
+        restoreAuthenticatedName();
         if (normalizeOwnerIdentity()) await syncToCloud();
         recordActivity();
         checkActivityAchievements();

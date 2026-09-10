@@ -54,8 +54,6 @@ service cloud.firestore {
         && request.resource.data.description is string
         && request.resource.data.description.size() >= 15
         && request.resource.data.description.size() <= 2000
-        && request.resource.data.evidence is list
-        && request.resource.data.evidence.size() <= 3
         && request.resource.data.created_at is string
         && request.resource.data.created_at.size() <= 40;
       allow update: if ownsUser(userId)
@@ -69,6 +67,17 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['requester_reply', 'status', 'requester_replied_at'])
         && request.resource.data.status == 'answered';
       allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if ownsUser(userId) || isAdmin();
+        allow create: if ((ownsUser(userId) && request.resource.data.role == 'requester')
+          || (isAdmin() && request.resource.data.role == 'admin'))
+          && request.resource.data.text is string
+          && request.resource.data.text.size() >= 3
+          && request.resource.data.text.size() <= 2000
+          && request.resource.data.created_at is string;
+        allow update, delete: if false;
+      }
     }
 
     match /{path=**}/tickets/{ticketId} {

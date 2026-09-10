@@ -29,7 +29,7 @@ const firestore = firebase.firestore();
 const firebaseAnalytics = firebase.analytics();
 firebaseAnalytics.setAnalyticsCollectionEnabled(false);
 if (EMAILJS_CONFIG.publicKey && window.emailjs) window.emailjs.init({ publicKey: EMAILJS_CONFIG.publicKey });
-const firebaseUser = (user) => user && user.uid ? { id: user.uid, email: user.email || '' } : null;
+const firebaseUser = (user) => user && user.uid ? { id: user.uid, email: user.email || '', displayName: user.displayName || '' } : null;
 const isAdminUser = () => Boolean(firebaseAuth.currentUser && firebaseAuth.currentUser.email === ADMIN_EMAIL && firebaseAuth.currentUser.emailVerified);
 
 const sb = {
@@ -102,7 +102,14 @@ const sb = {
     if (!user) return null;
     const reference = firestore.collection('support').doc(user.uid).collection('tickets').doc();
     const ticket = { ...data, user_id: user.uid, email: user.email || '' };
-    await reference.set(ticket);
+    const batch = firestore.batch();
+    batch.set(reference, ticket);
+    batch.set(reference.collection('messages').doc(), {
+      role: 'requester',
+      text: String(data.description || '').trim(),
+      created_at: data.created_at || new Date().toISOString()
+    });
+    await batch.commit();
     return { id: reference.id, ...ticket };
   },
 
@@ -131,19 +138,36 @@ const sb = {
   async getSupportTickets(userId) {
     if (!firebaseAuth.currentUser || userId !== firebaseAuth.currentUser.uid) return [];
     const snapshot = await firestore.collection('support').doc(userId).collection('tickets').orderBy('created_at', 'desc').limit(10).get();
-    return snapshot.docs.map((doc) => ({ id: doc.id, path: doc.ref.path, ...doc.data() }));
+    return Promise.all(snapshot.docs.map(async (doc) => ({
+      id: doc.id,
+      path: doc.ref.path,
+      ...doc.data(),
+      messages: (await doc.ref.collection('messages').orderBy('created_at', 'asc').limit(100).get()).docs.map((message) => ({ id: message.id, ...message.data() }))
+    })));
   },
 
   async getAdminTickets() {
     if (!isAdminUser()) return [];
     const snapshot = await firestore.collectionGroup('tickets').get();
-    return snapshot.docs.map((doc) => ({ id: doc.id, path: doc.ref.path, ...doc.data() }))
+    const tickets = await Promise.all(snapshot.docs.map(async (doc) => ({
+      id: doc.id,
+      path: doc.ref.path,
+      ...doc.data(),
+      messages: (await doc.ref.collection('messages').orderBy('created_at', 'asc').limit(100).get()).docs.map((message) => ({ id: message.id, ...message.data() }))
+    })));
+    return tickets
       .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));
   },
 
   async updateAdminTicket(ticket, response, status) {
     if (!isAdminUser() || !ticket?.path) return false;
-    await firestore.doc(ticket.path).update({ response: String(response || '').trim(), status, answered_at: new Date().toISOString() });
+    const trimmed = String(response || '').trim();
+    const answeredAt = new Date().toISOString();
+    const reference = firestore.doc(ticket.path);
+    const batch = firestore.batch();
+    batch.update(reference, { response: trimmed, status, answered_at: answeredAt });
+    batch.set(reference.collection('messages').doc(), { role: 'admin', text: trimmed, created_at: answeredAt });
+    await batch.commit();
     return true;
   },
 
@@ -157,11 +181,16 @@ const sb = {
       return { ok: false, reason: 'Sua resposta deve ter pelo menos 3 caracteres.' };
     }
     try {
-      await firestore.doc(ticket.path).update({
+      const repliedAt = new Date().toISOString();
+      const reference = firestore.doc(ticket.path);
+      const batch = firestore.batch();
+      batch.update(reference, {
         requester_reply: trimmed,
         status: 'answered',
-        requester_replied_at: new Date().toISOString()
+        requester_replied_at: repliedAt
       });
+      batch.set(reference.collection('messages').doc(), { role: 'requester', text: trimmed, created_at: repliedAt });
+      await batch.commit();
       return { ok: true };
     } catch (error) {
       Security.log('Support requester reply failed', { message: error.message });

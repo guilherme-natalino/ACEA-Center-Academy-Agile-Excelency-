@@ -93,7 +93,7 @@ const Security = (() => {
       const user = JSON.parse(value || 'null');
       if (!user || !(safeUuid(user.id) || safeFirebaseUid(user.id))) return null;
       const email = String(user.email || '').trim();
-      return { id: user.id, email };
+      return { id: user.id, email, displayName: String(user.displayName || '').slice(0, 120) };
     } catch (error) {
       return null;
     }

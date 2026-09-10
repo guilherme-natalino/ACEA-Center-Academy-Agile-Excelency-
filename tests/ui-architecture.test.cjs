@@ -46,6 +46,8 @@ test('Login offers password recovery without account enumeration', () => {
   assert.match(controller, /async function forgotPassword/);
   assert.match(model, /sendPasswordResetEmail/);
   assert.match(controller, /Se o email estiver cadastrado/);
+  assert.match(controller, /E-mail não encontrado ou inexistente/);
+  assert.match(controller, /data-password-target/);
 });
 
 test('Connected account menu explains Analytics and identifies the active user', () => {
@@ -109,6 +111,15 @@ test('Answered tickets allow the requester to reply back', () => {
   assert.match(controller, /support-user-reply/);
   assert.match(controller, /submitRequesterReply/);
   assert.match(model, /submitRequesterReply|requester_reply/);
+  assert.match(model, /messages/);
+  assert.match(view, /conversation|Histórico do atendimento/);
+});
+
+test('Document usability corrections are represented in the application flow', () => {
+  assert.match(controller, /auth\/user-not-found|E-mail não encontrado ou inexistente/);
+  assert.match(controller, /resetSupportForm/);
+  assert.match(view, /achievement|Conquista/);
+  assert.match(controller, /account-status/);
 });
 
 test('Admin area is restricted and can respond to tickets', () => {
@@ -121,8 +132,14 @@ test('Admin area is restricted and can respond to tickets', () => {
   assert.match(model, /async updateAdminTicket/);
   assert.match(model, /guilhermealisson14@hotmail\.com/);
   assert.match(view, /Admin tickets load failed/);
-  assert.match(view, /Resposta enviada/);
+  assert.match(view, /Histórico do atendimento|Resposta enviada/);
   assert.match(styles, /\*\[hidden\] \{ display: none !important; \}/);
+  assert.match(controller, /firebaseAuth\.currentUser\?\.reload/);
+});
+
+test('Support submission does not require evidence attachments', () => {
+  assert.doesNotMatch(html, /id="supportEvidence"/);
+  assert.doesNotMatch(controller, /supportEvidence/);
 });
 
 test('Notifications poll ticket creation and responses by user scope', () => {

@@ -488,7 +488,14 @@ function unlock(id) {
   if (profile.achievements[id]) return;
   profile.achievements[id] = Date.now();
   const achievement = ACH.find((item) => item[0] === id);
-  if (achievement) toast(`🏅 ${achievement[2]}`);
+  if (achievement) {
+    const message = `🏅 Conquista desbloqueada: ${achievement[2]}`;
+    toast(message);
+    if (typeof appNotifications !== 'undefined') {
+      appNotifications.unshift({ title: 'Nova conquista', message: achievement[2] });
+      if (typeof updateNotificationBadge === 'function') updateNotificationBadge();
+    }
+  }
 }
 
 // Displays a temporary notification without inserting HTML.
@@ -589,6 +596,22 @@ async function renderSupport() {
 
 let supportTicketsCache = [];
 
+// Renders the complete conversation, including legacy response fields when present.
+function renderTicketConversation(ticket) {
+  const messages = Array.isArray(ticket.messages) && ticket.messages.length
+    ? ticket.messages
+    : [
+      { role: 'requester', text: ticket.description, created_at: ticket.created_at },
+      ...(ticket.response ? [{ role: 'admin', text: ticket.response, created_at: ticket.answered_at }] : []),
+      ...(ticket.requester_reply ? [{ role: 'requester', text: ticket.requester_reply, created_at: ticket.requester_replied_at }] : [])
+    ];
+  return `<div class="support-conversation"><b>Histórico do atendimento</b>${messages.map((message) => `
+    <div class="support-message support-message--${message.role === 'admin' ? 'admin' : 'requester'}">
+      <div class="support-message-head"><strong>${message.role === 'admin' ? 'Equipe' : 'Você'}</strong><small>${esc(message.created_at || '')}</small></div>
+      <p>${esc(message.text || '')}</p>
+    </div>`).join('')}</div>`;
+}
+
 // Shows only tickets owned by the currently authenticated user.
 async function renderSupportTickets() {
   const container = document.getElementById('supportTickets');
@@ -651,8 +674,7 @@ function renderAdminTicketList(tickets) {
           <div class="admin-ticket-meta"><span class="tag">${esc(ticket.status || 'open')}</span><span>${esc(ticket.category || '')}</span><span>${esc(ticket.email || '')}</span><small>${esc(ticket.created_at || '')}</small></div>
           <h3>${esc(ticket.subject || '')}</h3>
           <p>${esc(ticket.description || '')}</p>
-          ${ticket.response ? `<div class="support-detail-block support-response has-response"><b>Resposta enviada</b><p>${esc(ticket.response)}</p></div>` : ''}
-          ${ticket.requester_reply ? `<div class="support-detail-block support-response has-response"><b>Resposta do solicitante</b><p>${esc(ticket.requester_reply)}</p></div>` : ''}
+          ${renderTicketConversation(ticket)}
           ${ticket.status === 'closed' ? '<div class="support-closed-note">Chamado encerrado. Somente consulta.</div>' : `<textarea class="admin-response" rows="4" data-ticket-response="${esc(ticket.id)}" placeholder="Escreva a resposta para o solicitante...">${esc(ticket.response || '')}</textarea><button class="btn" type="button" data-action="admin-respond" data-ticket-id="${esc(ticket.id)}">Salvar resposta</button>`}
         </article>`).join('')
       : '<div class="empty">Nenhum chamado corresponde aos filtros.</div>');
@@ -680,9 +702,8 @@ function openSupportTicket(ticketId) {
       <div class="support-ticket-detail-head"><span class="tag">${esc(ticket.status || 'open')}</span><span>${esc(ticket.category || '')}</span></div>
       <h2>${esc(ticket.subject)}</h2>
       <small>${esc(ticket.created_at || '')}</small>
-      <div class="support-detail-block"><b>Descrição enviada</b><p>${esc(ticket.description || '')}</p></div>
       <div class="support-detail-block support-response ${response ? 'has-response' : ''}"><b>Resposta da equipe</b><p>${response ? esc(response) : 'Aguardando atendimento da equipe.'}</p></div>
-      ${requesterReply ? `<div class="support-detail-block support-response has-response"><b>Resposta do solicitante</b><p>${esc(requesterReply)}</p></div>` : ''}
+      ${renderTicketConversation(ticket)}
       ${ticket.status === 'closed'
         ? '<div class="support-closed-note">Chamado encerrado. Não são permitidas novas respostas ou alterações.</div>'
         : response ? `

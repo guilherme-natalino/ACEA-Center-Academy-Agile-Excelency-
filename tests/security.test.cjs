@@ -44,7 +44,7 @@ test('Support tickets are restricted to the authenticated owner', () => {
   assert.match(rules, /request\.resource\.data\.user_id == userId/);
   assert.match(rules, /request\.resource\.data\.category in \['bug', 'account', 'progress', 'suggestion', 'other'\]/);
   assert.match(rules, /description\.size\(\) <= 2000/);
-  assert.match(rules, /request\.resource\.data\.evidence is list/);
+  assert.doesNotMatch(rules, /request\.resource\.data\.evidence is list/);
   assert.match(rules, /allow update: if ownsUser\(userId\)/);
   assert.match(rules, /request\.auth\.token\.email == 'guilhermealisson14@hotmail\.com'/);
   assert.match(rules, /request\.auth\.token\.email_verified == true/);
