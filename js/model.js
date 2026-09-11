@@ -30,7 +30,9 @@ const firebaseAnalytics = firebase.analytics();
 firebaseAnalytics.setAnalyticsCollectionEnabled(false);
 if (EMAILJS_CONFIG.publicKey && window.emailjs) window.emailjs.init({ publicKey: EMAILJS_CONFIG.publicKey });
 const firebaseUser = (user) => user && user.uid ? { id: user.uid, email: user.email || '', displayName: user.displayName || '' } : null;
-const isAdminUser = () => Boolean(firebaseAuth.currentUser && firebaseAuth.currentUser.email === ADMIN_EMAIL && firebaseAuth.currentUser.emailVerified);
+const isAdminUser = () => Boolean(firebaseAuth.currentUser
+  && String(firebaseAuth.currentUser.email || '').toLowerCase() === ADMIN_EMAIL.toLowerCase()
+  && firebaseAuth.currentUser.emailVerified);
 
 const sb = {
   async signUp(email, pass) {
@@ -142,7 +144,7 @@ const sb = {
       id: doc.id,
       path: doc.ref.path,
       ...doc.data(),
-      messages: (await doc.ref.collection('messages').orderBy('created_at', 'asc').limit(100).get()).docs.map((message) => ({ id: message.id, ...message.data() }))
+      messages: (await doc.ref.collection('messages').orderBy('created_at', 'asc').get()).docs.map((message) => ({ id: message.id, ...message.data() }))
     })));
   },
 
@@ -153,7 +155,7 @@ const sb = {
       id: doc.id,
       path: doc.ref.path,
       ...doc.data(),
-      messages: (await doc.ref.collection('messages').orderBy('created_at', 'asc').limit(100).get()).docs.map((message) => ({ id: message.id, ...message.data() }))
+      messages: (await doc.ref.collection('messages').orderBy('created_at', 'asc').get()).docs.map((message) => ({ id: message.id, ...message.data() }))
     })));
     return tickets
       .sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')));

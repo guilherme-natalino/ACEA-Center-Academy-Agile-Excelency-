@@ -46,8 +46,9 @@ test('Login offers password recovery without account enumeration', () => {
   assert.match(controller, /async function forgotPassword/);
   assert.match(model, /sendPasswordResetEmail/);
   assert.match(controller, /Se o email estiver cadastrado/);
+  assert.match(controller, /data-action="toggle-password"/);
+  assert.match(controller, /function togglePassword/);
   assert.match(controller, /E-mail não encontrado ou inexistente/);
-  assert.match(controller, /data-password-target/);
 });
 
 test('Connected account menu explains Analytics and identifies the active user', () => {
@@ -91,6 +92,7 @@ test('Support area provides FAQ and authenticated ticket flow', () => {
   assert.match(view, /async function renderSupport/);
   assert.match(html, /acaeacademiaagile@gmail\.com/);
   assert.match(html, /Não encontrou a resposta\?/);
+  assert.doesNotMatch(html, /supportEvidence|Evidências \(opcional\)/);
 });
 
 test('Requester can open a ticket and read the team response', () => {
@@ -112,7 +114,14 @@ test('Answered tickets allow the requester to reply back', () => {
   assert.match(controller, /submitRequesterReply/);
   assert.match(model, /submitRequesterReply|requester_reply/);
   assert.match(model, /messages/);
+  assert.doesNotMatch(model, /collection\('messages'\)[\s\S]*?limit\(100\)/);
   assert.match(view, /conversation|Histórico do atendimento/);
+});
+
+test('Support interface preserves conversations and controls on narrow screens', () => {
+  assert.match(styles, /\.support-message-head[\s\S]*flex-wrap/);
+  assert.match(styles, /\.admin-ticket[\s\S]*overflow-wrap/);
+  assert.match(styles, /@media \(max-width: 480px\)/);
 });
 
 test('Document usability corrections are represented in the application flow', () => {
@@ -134,12 +143,7 @@ test('Admin area is restricted and can respond to tickets', () => {
   assert.match(view, /Admin tickets load failed/);
   assert.match(view, /Histórico do atendimento|Resposta enviada/);
   assert.match(styles, /\*\[hidden\] \{ display: none !important; \}/);
-  assert.match(controller, /firebaseAuth\.currentUser\?\.reload/);
-});
-
-test('Support submission does not require evidence attachments', () => {
-  assert.doesNotMatch(html, /id="supportEvidence"/);
-  assert.doesNotMatch(controller, /supportEvidence/);
+  assert.match(controller, /currentUser = Security\.parseStoredUser[\s\S]*renderAdminAccess\(\)/);
 });
 
 test('Notifications poll ticket creation and responses by user scope', () => {

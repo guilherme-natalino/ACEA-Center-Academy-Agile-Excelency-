@@ -489,13 +489,13 @@ button,a{font:inherit}
 .support-conversation > b { font-size: 11px; }
 .support-message { padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: rgba(255,255,255,.03); }
 .support-message--admin { border-color: rgba(35,213,110,.28); background: rgba(35,213,110,.06); }
-.support-message-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-size: 10px; }
+.support-message-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; font-size: 10px; }
 .support-message--admin .support-message-head strong { color: var(--green); }
 .support-message-head small { color: var(--muted); font-size: 9px; }
 .support-message p { margin: 6px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; white-space: pre-wrap; }
 .support-close-ticket { width: 100%; margin-top: 14px; background: rgba(255,128,128,.1); border-color: rgba(255,128,128,.35); color: #ff9a9a; }
 .support-closed-note { margin-top: 14px; padding: 11px; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); font-size: 11px; text-align: center; }
-.admin-ticket { margin-bottom: 12px; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+.admin-ticket { min-width: 0; margin-bottom: 12px; padding: 16px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow-wrap: anywhere; }
 .admin-filters { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px; align-items: center; margin-bottom: 12px; }
 .admin-filter-search-wrap { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 0 11px; border: 1px solid var(--border2); border-radius: 6px; background: var(--surface); color: var(--muted); }
 .admin-filter-search-wrap > span { font-size: 19px; line-height: 1; transform: rotate(-15deg); }
@@ -522,7 +522,6 @@ button,a{font:inherit}
   .explainer-grid { grid-template-columns: 1fr 1fr; }
   .explainer-grid > div { border-right: 0; }
   .metrics-overview { grid-template-columns: 1fr 1fr; }
-  .top-stat { display: none; }
   .journey-track { gap: 2px; }
 }
 
@@ -555,6 +554,42 @@ button,a{font:inherit}
   .continue-content > strong { display: none; }
   .admin-filters { grid-template-columns: 1fr 1fr; }
   .admin-filter-search-wrap { grid-column: 1 / -1; }
+}
+
+@media (max-width: 480px) {
+  html, body, .top, .main, .screen, .card, .hero { width: 100%; max-width: 100%; min-width: 0; }
+  .main { overflow-x: hidden; }
+  .toprow { gap: 7px; padding-left: 8px; padding-right: 8px; }
+  .brand { min-width: 0; }
+  .brand b, .brand span { overflow: hidden; text-overflow: ellipsis; }
+  .xp { padding-left: 7px; padding-right: 7px; font-size: 9px; }
+  .top-stat { min-width: 46px; padding: 4px 5px; border-radius: 7px; font-size: 8px; }
+  .top-stat span { margin-right: 1px; }
+  .top-stat b { font-size: 9px; }
+  .top-stat small { font-size: 6px; }
+  .nav { gap: 3px; padding-left: 4px; padding-right: 4px; }
+  .nav button { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+  .nav button span { max-width: 100%; white-space: nowrap; font-size: 8px; }
+  .journey-track { width: 100%; overflow: hidden; }
+  .track-mascot-wrap { width: 17vw; height: 72px; }
+  .track-mascot-label { max-width: 17vw; font-size: 7px; }
+  .journey-node--current .track-mascot-label { font-size: 8px; }
+  .modal { padding: 6px; }
+  .modal-card { max-height: 96vh; border-radius: 14px; }
+  .auth-modal { padding: 24px 14px 22px; }
+  .auth-header { gap: 10px; margin-bottom: 18px; }
+  .auth-logo { width: 54px; height: 54px; }
+  .auth-row { grid-template-columns: 1fr; }
+  #adminContent, #adminFilters, .admin-ticket, .admin-ticket-meta { width: 100%; max-width: 100%; min-width: 0; }
+  .admin-filters { grid-template-columns: minmax(0, 1fr); }
+  .admin-filter-search-wrap { grid-column: auto; }
+  .admin-filter-field { min-width: 0; }
+  .admin-filter-search, .admin-filter-select, .admin-response { max-width: 100%; min-width: 0; }
+  .support-ticket-detail, .notification-panel { padding: 16px 10px; }
+  .support-message-head small { max-width: 100%; overflow-wrap: anywhere; }
+  .support-detail-block, .support-message { min-width: 0; }
+  .actions, .support-reply-box { min-width: 0; }
+  .actions .btn, .support-reply-box .btn, .admin-response + .btn { max-width: 100%; }
 }
 
 
@@ -637,6 +672,9 @@ button,a{font:inherit}
 }
 
 .auth-input-wrap { position: relative; display: flex; align-items: center; }
+.password-toggle { position: absolute; right: 10px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 14px; line-height: 1; padding: 5px; }
+.password-toggle:hover, .password-toggle:focus { color: var(--text); }
+.auth-input-wrap .password-toggle ~ .auth-input { padding-right: 38px; }
 
 .auth-icon {
   position: absolute; left: 12px;
@@ -659,10 +697,6 @@ button,a{font:inherit}
   box-shadow: 0 0 0 3px rgba(91,130,255,.18);
 }
 .auth-input::placeholder { color: rgba(255,255,255,.25); }
-.auth-input-wrap { position: relative; }
-.auth-password-input { padding-right: 42px; }
-.password-toggle { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); width: 25px; height: 25px; border: 0; background: transparent; color: var(--muted); cursor: pointer; font-size: 15px; }
-.password-toggle:hover, .password-toggle:focus { color: var(--text); }
 
 .auth-select { cursor: pointer; padding-right: 36px; }
 .auth-select option { background: #1a2235; color: #fff; }

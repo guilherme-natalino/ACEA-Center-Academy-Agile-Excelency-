@@ -17,15 +17,6 @@ function normalizeOwnerIdentity() {
   return changed;
 }
 
-// Restores the display name saved by Firebase when an older cloud profile lacks it.
-function restoreAuthenticatedName() {
-  if (!currentUser?.displayName || profile.nome) return false;
-  const parts = currentUser.displayName.trim().split(/\s+/);
-  profile.nome = parts.shift() || '';
-  profile.sobrenome = parts.join(' ');
-  return Boolean(profile.nome);
-}
-
 // Opens the account menu for an authenticated user.
 function showAuthMenu() {
   if (!currentUser) {
@@ -171,7 +162,8 @@ function showAuthModal() {
           <label class="auth-label" for="aPass">Senha</label>
           <div class="auth-input-wrap">
             <svg class="auth-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="9" width="14" height="10" rx="2"/><path d="M7 9V6a3 3 0 016 0v3"/></svg>
-            <input class="auth-input auth-password-input" id="aPass" type="password" placeholder="Mínimo de 8 caracteres" autocomplete="current-password" minlength="8" maxlength="128"><button class="password-toggle" type="button" data-password-target="aPass" aria-label="Mostrar senha">👁</button>
+            <input class="auth-input" id="aPass" type="password" placeholder="Mínimo de 8 caracteres" autocomplete="current-password" minlength="8" maxlength="128">
+            <button class="password-toggle" type="button" data-action="toggle-password" data-password-target="aPass" aria-label="Mostrar senha">◉</button>
           </div>
         </div>
         <button class="auth-link" type="button" data-action="forgot-password">Esqueci minha senha</button>
@@ -251,14 +243,16 @@ function showAuthModal() {
             <label class="auth-label" for="rPass">Senha</label>
             <div class="auth-input-wrap">
               <svg class="auth-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="9" width="14" height="10" rx="2"/><path d="M7 9V6a3 3 0 016 0v3"/></svg>
-              <input class="auth-input auth-password-input" id="rPass" type="password" placeholder="Mínimo de 8 caracteres" autocomplete="new-password" minlength="8" maxlength="128"><button class="password-toggle" type="button" data-password-target="rPass" aria-label="Mostrar senha">👁</button>
+              <input class="auth-input" id="rPass" type="password" placeholder="Mínimo de 8 caracteres" autocomplete="new-password" minlength="8" maxlength="128">
+              <button class="password-toggle" type="button" data-action="toggle-password" data-password-target="rPass" aria-label="Mostrar senha">◉</button>
             </div>
           </div>
           <div class="auth-field">
             <label class="auth-label" for="rPass2">Confirmar senha</label>
             <div class="auth-input-wrap">
               <svg class="auth-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="3" y="9" width="14" height="10" rx="2"/><path d="M7 9V6a3 3 0 016 0v3"/></svg>
-              <input class="auth-input auth-password-input" id="rPass2" type="password" placeholder="Repita a senha" autocomplete="new-password" minlength="8" maxlength="128"><button class="password-toggle" type="button" data-password-target="rPass2" aria-label="Mostrar senha">👁</button>
+              <input class="auth-input" id="rPass2" type="password" placeholder="Repita a senha" autocomplete="new-password" minlength="8" maxlength="128">
+              <button class="password-toggle" type="button" data-action="toggle-password" data-password-target="rPass2" aria-label="Mostrar senha">◉</button>
             </div>
           </div>
         </div>
@@ -388,16 +382,6 @@ function setAuthMode(mode) {
   document.getElementById('formRegister').className = isLogin ? 'auth-form auth-form--hidden' : 'auth-form';
 }
 
-// Toggles password visibility without changing the submitted value.
-function togglePassword(targetId, button) {
-  const input = document.getElementById(targetId);
-  if (!input) return;
-  const visible = input.type === 'text';
-  input.type = visible ? 'password' : 'text';
-  button.textContent = visible ? '👁' : '🙈';
-  button.setAttribute('aria-label', visible ? 'Mostrar senha' : 'Ocultar senha');
-}
-
 // Sends login or registration data to Firebase after local validation.
 async function submitAuth() {
   const emailInput = document.getElementById('aEmail');
@@ -432,11 +416,13 @@ async function submitAuth() {
 
       currentUser = Security.parseStoredUser(JSON.stringify(response.user));
       if (!currentUser) throw new Error('Sessão inválida retornada pelo provedor.');
+      renderAdminAccess();
 
-      if (firebaseAuth.currentUser?.reload) await firebaseAuth.currentUser.reload();
-      currentUser = Security.parseStoredUser(JSON.stringify(firebaseUser(firebaseAuth.currentUser)));
-
-      restoreAuthenticatedName();
+      if (!profile.nome && currentUser.displayName) {
+        const nameParts = currentUser.displayName.trim().split(/\s+/);
+        profile.nome = nameParts.shift() || '';
+        profile.sobrenome = nameParts.join(' ');
+      }
 
       localStorage.setItem('firebase_user', JSON.stringify(currentUser));
       const sessionProfile = Security.normalizeProfile(profile);
@@ -447,7 +433,7 @@ async function submitAuth() {
         return;
       }
       if (cloudHasProgress) applyCloudData(cloudData);
-      restoreAuthenticatedName();
+      else if (cloudData?.profile) applyCloudData(cloudData);
       else await syncToCloud();
     } else {
       response = await sb.signUp(email, password);
@@ -485,11 +471,20 @@ async function submitAuth() {
 // Converts provider error messages into safe, user-friendly messages.
 function friendlyAuthError(message) {
   const text = String(message || '');
-  if (/user-not-found|invalid-credential|invalid-login-credentials/i.test(text)) return 'E-mail não encontrado ou inexistente.';
+  if (/user-not-found|invalid-credential/i.test(text)) return 'E-mail não encontrado ou inexistente.';
   if (/invalid|credentials/i.test(text)) return 'Email ou senha incorretos.';
   if (/email not confirmed/i.test(text)) return 'Confirme seu email antes de entrar.';
   if (/already/i.test(text)) return 'Este email já possui uma conta.';
   return 'Não foi possível autenticar. Verifique os dados e tente novamente.';
+}
+
+function togglePassword(targetId, trigger) {
+  const input = document.getElementById(targetId);
+  if (!input) return;
+  const visible = input.type === 'text';
+  input.type = visible ? 'password' : 'text';
+  trigger.textContent = visible ? '◉' : '◌';
+  trigger.setAttribute('aria-label', visible ? 'Mostrar senha' : 'Ocultar senha');
 }
 
 // Clears draft support data whenever the user leaves and returns to Help.
@@ -897,6 +892,7 @@ document.addEventListener('click', (event) => {
     case 'auth-modal': showAuthModal(); break;
     case 'close-modal': closeModal(); break;
     case 'submit-auth': submitAuth(); break;
+    case 'toggle-password': togglePassword(actionButton.dataset.passwordTarget, actionButton); break;
     case 'forgot-password': forgotPassword(); break;
     case 'submit-register': submitRegister(); break;
     case 'signout': doSignOut(); break;
@@ -1018,11 +1014,6 @@ document.getElementById('supportForm')?.addEventListener('submit', submitSupport
 
 // Handles login/register mode changes in the authentication dialog.
 document.addEventListener('click', (event) => {
-  const passwordButton = event.target.closest('[data-password-target]');
-  if (passwordButton) {
-    togglePassword(passwordButton.dataset.passwordTarget, passwordButton);
-    return;
-  }
   const modeButton = event.target.closest('[data-auth-mode]');
   if (modeButton) setAuthMode(modeButton.dataset.authMode);
 });
@@ -1140,7 +1131,6 @@ async function boot() {
     if (currentUser) {
       const loaded = await loadFromCloud();
       if (loaded) {
-        restoreAuthenticatedName();
         if (normalizeOwnerIdentity()) await syncToCloud();
         recordActivity();
         checkActivityAchievements();
